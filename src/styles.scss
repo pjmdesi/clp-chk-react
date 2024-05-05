@@ -1,0 +1,479 @@
+@import 'reset';
+@import '_colors';
+
+:root {
+	--btnSize: 26px;
+	--spacing: 3px;
+	--font-size: 14px;
+	--radius: 6px;
+
+	--user-divider-thickness: 0.25px;
+	--user-divider-color: var(--white);
+}
+
+$orange-gradient: linear-gradient(0deg, var(--pale-orange) 0%, var(--orange) 100%);
+$blue-gradient: linear-gradient(0deg, var(--gray-blue) 0%, var(--blue) 100%);
+$dark-blue-gradient: linear-gradient(0deg, var(--dark-blue) 0%, var(--darker-blue) 100%);
+
+// Bevel shadow effects
+$bevel-shadow-sink-in: 0 -1px 2px rgba(
+			$color: var(--white-rgb),
+			$alpha: 0.1,
+		) inset,
+	0 1px 2px
+		rgba(
+			$color: var(--black-rgb),
+			$alpha: 0.25,
+		)
+		inset;
+
+$bevel-shadow-pop-out: 0 1px 2px
+		rgba(
+			$color: var(--white-rgb),
+			$alpha: 0.05,
+		)
+		inset,
+	0 -1px 2px rgba(
+			$color: var(--black-rgb),
+			$alpha: 0.2,
+		) inset;
+
+button,
+label,
+input {
+	appearance: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	outline: none;
+	cursor: pointer;
+	border: none;
+	background: none;
+	padding: 0;
+	margin: 0;
+	font: inherit;
+	color: inherit;
+	min-width: 0;
+}
+
+button {
+	height: 100%;
+	padding: var(--spacing);
+	border-radius: var(--radius);
+
+	font-size: var(--font-size);
+
+    box-shadow: none;
+
+    transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+	&:hover {
+		background: var(--pink);
+		box-shadow: $bevel-shadow-pop-out;
+	}
+
+    &:active {
+        background: var(--);
+        box-shadow: $bevel-shadow-sink-in;
+    }
+}
+
+#root {
+	background: $dark-blue-gradient;
+	padding: 36px 8px 8px;
+	border-radius: 16px;
+	// margin-top: -36px;
+
+	font: 400 16px 'Roboto', sans-serif;
+	color: var(--white);
+
+	min-width: 900px;
+}
+
+#mainContainer {
+	display: block;
+	position: relative;
+	width: 100%;
+	height: 100%;
+	border-radius: 8px;
+	background-color: var(--black);
+
+	overflow: hidden;
+
+	box-shadow: 0 1px 6px rgba($color: var(--black-rgb), $alpha: 0.8);
+}
+
+#videoContainer {
+	position: relative;
+	display: inline-block;
+	width: 100%;
+	height: 100%;
+
+	background-color: var(--black);
+
+	--static-dark: var(--gray5);
+	--static-light: var(--gray7);
+
+	label.file-input {
+		position: absolute;
+		top: 50vh;
+		left: 75vw;
+
+        &:nth-of-type(2) {
+            left: 25vw;
+        }
+
+		display: flex;
+        flex-wrap: wrap;
+        gap: calc( 4 * var(--spacing)) 0;
+
+        text-align: center;
+		justify-content: center;
+		align-items: center;
+        align-content: center;
+        justify-items: center;
+
+        z-index: 4;
+
+		width: 150px;
+		height: 150px;
+
+		background: rgba(8, 22, 47, 0.75);
+		box-shadow: inset 0px 3px 8px rgba(255, 255, 255, 0.1), inset 0px -3px 8px rgba(0, 0, 0, 0.25);
+		backdrop-filter: blur(4px);
+		/* Note: backdrop-filter has minimal browser support */
+		border-radius: 16px;
+
+		appearance: none;
+
+		transform: translate(-50%, -50%);
+
+        > span {
+            grid-column: 1 / -1;
+            display: block;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+
+		> input {
+			display: none;
+		}
+	}
+
+    .video-closer {
+        display: flex;
+        height: auto;
+        position: absolute;
+        inset: 1rem auto auto 1rem;
+
+        ~ .video-closer {
+            inset: 1rem 1rem auto auto;
+        }
+
+        background: transparent;
+
+        color: var(--white);
+        svg {
+            fill: currentColor;
+            stroke: currentColor;
+        }
+
+        filter: drop-shadow(0 0 0.125rem var(--black));
+        cursor: pointer;
+
+        transform: scale(1);
+        transition: transform 0.15s ease-in-out, stroke 0.15s ease-in-out, color 0.15s ease-in-out, filter 0.15s ease-in-out;
+
+        z-index: 4;
+
+        &:hover {
+            color: var(--pink);
+            filter: drop-shadow(0 0 0.25rem var(--pink));
+            transform: scale(1.25);
+        }
+    }
+
+	// generate tv static
+
+	&.empty,
+    &.empty>#videoClipper {
+		background:
+        // repeating-radial-gradient(var(--static-dark) 0 0.0001%, var(--static-light) 0 0.0002%) 50% 0/2500px 2500px,
+			repeating-conic-gradient(var(--static-dark) 0 0.0001%, var(--static-light) 0 0.0002%) 60% 60%/2500px 2500px;
+		// background-blend-mode: color;
+		animation: static-anim 0.2s infinite alternate;
+
+		.video-label {
+			display: none;
+		}
+	}
+
+	#videoClipper {
+		position: relative;
+		box-shadow: 0 0 0 var(--user-divider-thickness) var(--user-divider-color);
+
+		will-change: contents;
+
+        z-index: 0;
+
+		&.divider {
+			width: 100%;
+			height: 100%;
+			top: 0;
+			bottom: 0;
+			overflow: hidden;
+		}
+
+        &.boxCutout,
+		&.circleCutout {
+			// clip-path: circle(50% at 50% 50%);
+			overflow: hidden;
+			transform: translate(-50%, -50%);
+			border-radius: 50%;
+
+			box-shadow: 0 0 0 calc(var(--user-divider-thickness) + 0.75px) var(--user-divider-color);
+		}
+
+        &.circleCutout {
+			border-radius: 50%;
+		}
+	}
+
+	video {
+		left: calc(50vw - 8px);
+		transform: translateX(-50%);
+		display: block;
+		height: 100%;
+		position: absolute;
+		background: var(--black);
+	}
+
+	#videoClipper video {
+		width: 200%;
+		z-index: 1;
+	}
+}
+
+@keyframes static-anim {
+	100% {
+		background-position: 50% 0, 60% 50%;
+	}
+}
+
+#controllerBar {
+	position: absolute;
+	width: calc(100% - 32px);
+	inset: auto 16px 16px;
+	height: 48px;
+	background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+	border-radius: 16px;
+	padding: 8px;
+
+	display: grid;
+	grid: 1fr / 1fr auto 1fr;
+	gap: 8px;
+
+	backdrop-filter: blur(8px);
+
+	z-index: 999;
+
+	box-shadow: 0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset, 0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+
+	.control-group {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+
+		&:nth-child(1) {
+			flex: 0 1 auto;
+			justify-content: flex-start;
+		}
+
+		&:nth-child(2) {
+			min-width: fit-content;
+			justify-content: center;
+		}
+
+		&:nth-child(3) {
+			flex: 1 0 auto;
+			justify-content: space-between;
+		}
+
+		.control-subgroup {
+			display: flex;
+			flex: 0 1 auto;
+			align-items: center;
+			gap: 4px;
+
+			--btnSize: 20px;
+			--font-size: 12px;
+		}
+
+		.control-slider-container {
+			--slider-dimen: 6px;
+			--slider-spacing: 10px;
+
+			display: flex;
+			// grid: 1fr / 100px auto;
+			align-items: center;
+			gap: 4px;
+			min-width: 100px;
+
+			.rc-slider {
+				margin: auto var(--slider-spacing);
+				padding: unset;
+				flex: 1 0 100px;
+				height: var(--slider-dimen);
+
+				.rc-slider-rail,
+				.rc-slider-track {
+					height: var(--slider-dimen);
+					border-radius: calc(var(--slider-dimen) / 2);
+				}
+
+				.rc-slider-rail {
+					background: linear-gradient(180deg, #aab6cc 0%, #7f96c0 100%);
+				}
+
+				.rc-slider-track {
+					background: linear-gradient(360deg, #ff5a46 0%, #ff7844 100%);
+				}
+
+				.rc-slider-handle {
+					width: calc(var(--slider-spacing) + var(--slider-dimen));
+					height: calc(var(--slider-spacing) + var(--slider-dimen));
+
+					background: var(--pink);
+					opacity: 1;
+					border: 2px solid #ffffff;
+					border-radius: 50%;
+
+					&.rc-slider-handle-dragging {
+						box-shadow: 0 0 0 3px var(--orange);
+					}
+				}
+			}
+
+			input {
+				flex: 0 1 auto;
+
+				display: block;
+				text-align: center;
+				font-size: var(--font-size);
+				padding: var(--spacing) 8px;
+
+				background: #08162f;
+				box-shadow: $bevel-shadow-pop-out;
+				border-radius: 10px;
+			}
+		}
+
+		label:has(input[type='checkbox']),
+		label:has(input[type='radio']) {
+			position: relative;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			user-select: none;
+
+			font-size: var(--font-size);
+
+			height: var(--btnSize);
+			padding: var(--spacing);
+		}
+
+		.control-checkbox-container,
+		.control-radio-group {
+			display: flex;
+			gap: var(--spacing);
+			padding: var(--spacing);
+			justify-content: center;
+			background-color: var(--dark-blue);
+			border-radius: var(--radius);
+
+			box-shadow: $bevel-shadow-sink-in;
+		}
+
+		.control-checkbox-container {
+			label:has(input[type='checkbox']) {
+				border-radius: calc(var(--radius) - var(--spacing));
+
+				&:has(input[type='checkbox']:checked) {
+					box-shadow: $bevel-shadow-pop-out;
+					background: var(--pink);
+				}
+
+				> .lucide {
+					aspect-ratio: 1;
+					width: calc(var(--btnSize) - 2 * var(--spacing));
+					height: calc(var(--btnSize) - 2 * var(--spacing));
+				}
+			}
+		}
+
+		.control-radio-group {
+			--radius: 16px;
+			align-items: center;
+
+			&.auto-fold {
+				--width: var(--btnSize);
+				--radio-offset: 0;
+
+				width: calc(var(--width) + 2 * var(--spacing));
+				max-width: calc(var(--btnSize) + 2 * var(--spacing));
+				overflow: hidden;
+
+				transition: width 0.2s ease-in-out, max-width 0.2s ease-in-out;
+
+				@for $i from 2 through 8 {
+					&:has(label:nth-child(#{$i})) {
+						// change hover width to the width of the button group plus the spacing between buttons and the spacing on the sides of the container ($i + 1)
+						--hover-width: calc(#{$i} * var(--btnSize) + ((#{$i + 1}) * var(--spacing)));
+
+						@for $j from 1 through $i {
+							&:has(label:nth-child(#{$j}) > input[type='radio']:checked) {
+								// calculate the left offset of the checked radio button to position the checked button in the center of the container when it is folded
+								$positionCalc: #{$i - 2 * $j + 1} / 2;
+								$leftOffset: calc($positionCalc * var(--btnSize) + ($positionCalc) * var(--spacing));
+
+								--radio-offset: #{$leftOffset};
+							}
+						}
+					}
+				}
+
+				&:hover {
+					max-width: var(--hover-width);
+					width: var(--hover-width);
+
+					--radio-offset: 0 !important;
+				}
+
+				> label {
+					position: relative;
+					left: var(--radio-offset);
+
+					transition: left 0.2s ease-in-out;
+				}
+			}
+
+			label:has(input[type='radio']) {
+				aspect-ratio: 1;
+				border-radius: 50%;
+
+				min-width: var(--btnSize);
+
+				&:has(input[type='radio']:checked) {
+					box-shadow: $bevel-shadow-pop-out;
+					background: var(--pink);
+				}
+
+				> .lucide {
+					aspect-ratio: 1;
+					width: calc(var(--btnSize) - 2 * var(--spacing));
+					height: calc(var(--btnSize) - 2 * var(--spacing));
+				}
+			}
+		}
+	}
+}

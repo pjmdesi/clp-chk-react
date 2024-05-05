@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>ClpChk — Compare Media Versions</title>
+
+    <style>
+        #loading {
+            position: absolute;
+            inset: 0;
+            background-color: black;
+            color: white;
+
+            display: flex;
+            align-items: center;
+
+            font: sans-serif;
+        }
+
+        .cet-titlebar {
+            border-radius: 16px 16px 0 0;
+            overflow: hidden !important;
+            height: 36px !important;
+        }
+
+        .cet-title {
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .cet-container {
+            top: 0px !important;
+        }
+    </style>
+
+</head>
+
+<body style="border-radius: 16px; overflow: visible;">
+    <div id="root">
+        <!-- Loading elements for when React has not yet loaded -->
+        <div id="loading">
+            <h1>Loading...</h1>
+        </div>
+    </div>
+</body>
+
+</html>
