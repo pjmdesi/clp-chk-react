@@ -5,24 +5,17 @@ import VideoFileInput from '../VideoFileInput';
 import Icon from '../Icon';
 
 function VideoContainer({ toolSettings, playbackStatus, leftVideo, rightVideo, setLeftVideo, setRightVideo }) {
-	/* var videoContainer = document.getElementById('video-compare-container'),
-		leftVideo = document.getElementById('left-video'),
-		rightVideo = document.getElementById('right-video'),
-		leftVideoOverlay = document.getElementById('left-video-overlay'),
-		rightVideoOverlay = document.getElementById('right-video-overlay'),
-		leftVideoLabel = document.getElementById('left-video-label'),
-		rightVideoLabel = document.getElementById('right-video-label'); */
 
 	const videoContainer = React.useRef(),
 		leftVideoElem = React.useRef(),
 		rightVideoElem = React.useRef(),
 		videoClipper = React.useRef();
 
-	const [dividerPosition, setDividerPosition] = React.useState({ x: 50, y: 50 }),
-		[leftVideoLabel, setLeftVideoLabel] = React.useState(''),
-		[rightVideoLabel, setRightVideoLabel] = React.useState(''),
+	const [leftVideoLabel, setLeftVideoLabel] = React.useState('Left Video'),
+		[rightVideoLabel, setRightVideoLabel] = React.useState('Right Video'),
 		[clipperStyle, setClipperStyle] = React.useState({ width: '50%' }),
-		[clippedVideoStyle, setClippedVideoStyle] = React.useState({ minWidth: '200%', zIndex: 3 });
+		[clippedVideoStyle, setClippedVideoStyle] = React.useState({ minWidth: '200%', zIndex: 3 }),
+		continuousClipInterval = React.useRef(null);
 
 	React.useEffect(() => {
 		if (leftVideo && rightVideo) {
@@ -37,6 +30,13 @@ function VideoContainer({ toolSettings, playbackStatus, leftVideo, rightVideo, s
 			}
 		}
 	}, [playbackStatus, leftVideo, rightVideo]);
+
+	React.useEffect(() => {
+		clearInterval(continuousClipInterval.current);
+		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) {
+			clipVideoContinuous();
+		}
+	}, [toolSettings]);
 
 	const setLeftVideoFile = file => {
 		setLeftVideo(file);
@@ -79,7 +79,7 @@ function VideoContainer({ toolSettings, playbackStatus, leftVideo, rightVideo, s
 	}; */
 
 	const clipVideo = event => {
-		// if (!(leftVideo && rightVideo)) return;
+		if (!(leftVideo && rightVideo)) return;
 
 		let vidContElem = videoContainer.current,
 			cursor = { x: event.pageX, y: event.pageY };
@@ -96,7 +96,7 @@ function VideoContainer({ toolSettings, playbackStatus, leftVideo, rightVideo, s
 
 		if (toolSettings.toolMode === 'circleCutout' || toolSettings.toolMode === 'boxCutout') {
 			const circleSettings = {
-				radius: toolSettings.toolOptions.value,
+				radius: toolSettings.toolOptions.value[toolSettings.toolMode],
 			};
 
 			let rect = vidContElem.getBoundingClientRect(),
@@ -106,8 +106,6 @@ function VideoContainer({ toolSettings, playbackStatus, leftVideo, rightVideo, s
 				};
 
 			if (clipperPos.x <= 100 && clipperPos.y <= 100) {
-				console.log(clipperPos.x, clipperPos.y, circleSettings.radius, clipperPos.x - circleSettings.radius, clipperPos.y - circleSettings.radius);
-
 				setClipperStyle({
 					width: circleSettings.radius * 2,
 					height: circleSettings.radius * 2,
@@ -130,7 +128,40 @@ function VideoContainer({ toolSettings, playbackStatus, leftVideo, rightVideo, s
 		}
 	};
 
+	const clipVideoContinuous = () => {
+		// clearInterval(continuousClipInterval.current);
+		console.log('clipVideoContinuous');
+		// if (!(leftVideo && rightVideo)) return;
+
+		let position = toolSettings.toolOptions.type === 'rightToLeft' ? 100 : 0,
+			positionDirection = 1,
+			timingSegment = 10,
+			vidContElem = videoContainer.current,
+			i = 0;
+
+		const positionDeltaScale = (toolSettings.toolOptions.value.divider / 60);
+
+		continuousClipInterval.current = setInterval(() => {
+			if (toolSettings.toolOptions.type === 'rightToLeft') {
+				position <= 0 ? (position = 100) : (position += -1 * positionDeltaScale);
+			} else if (toolSettings.toolOptions.type === 'leftToRight') {
+				position >= 100 ? (position = 0) : (position += positionDeltaScale);
+			} else {
+				position >= 100 && (positionDirection = -1);
+				position <= 0 && (positionDirection = 1);
+				position += positionDirection * positionDeltaScale;
+			}
+
+			clipVideo({ pageX: (position / 100) * vidContElem.offsetWidth, pageY: 0 });
+
+			i++;
+
+			!(i % 100) && console.log({ position });
+		}, timingSegment);
+	};
+
 	const handleMouseMove = event => {
+		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) return;
 		clipVideo(event);
 	};
 
@@ -211,34 +242,24 @@ function VideoContainer({ toolSettings, playbackStatus, leftVideo, rightVideo, s
 		rightVideo.paused ? togglePlay(playpause, rightVideo) : togglePause(playpause, rightVideo);
 	};
 
-	const togglePause = (button, video) => {
-		// button.src = ICON_PLAY;
-		// video.pause();
-	};
-
-	const togglePlay = (button, video) => {
-		// button.src = ICON_PAUSE;
-		// video.play();
-	};
-
 	syncVideoStart();
 
 	return (
 		<div id="videoContainer" ref={videoContainer} onMouseMove={handleMouseMove} className={rightVideo && leftVideo ? '' : 'empty'}>
 			{leftVideo ? (
-				<div className="video-info left-info">
-					<p className="video-label vl-left">{leftVideoLabel}</p>
+				<div className="video-info left-video-info">
 					<button className="video-closer" type="button" onClick={() => setLeftVideo('')}>
 						<Icon name="X" />
 					</button>
+					<p className="video-label">{leftVideoLabel}</p>
 				</div>
 			) : (
 				<VideoFileInput setVideoFile={setLeftVideoFile} />
 			)}
 			{rightVideo ? (
 				<>
-					<div className="video-info right-info">
-						<p className="video-label vl-right">{rightVideoLabel}</p>
+					<div className="video-info right-video-info">
+						<p className="video-label">{rightVideoLabel}</p>
 						<button className="video-closer" type="button" onClick={() => setRightVideo('')}>
 							<Icon name="X" />
 						</button>

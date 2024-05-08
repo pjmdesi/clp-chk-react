@@ -9,7 +9,11 @@ const defaultToolSettings = {
 	toolOptions: {
 		auto: false,
 		type: 'backAndForth',
-		value: 100,
+		value: {
+            divider: 10,
+            boxCutout: 200,
+            circleCutout: 200,
+        }
 	},
 	playerSpeed: 1,
 	playerLoop: false,
@@ -24,8 +28,8 @@ function MainContainer() {
 	const [currentModal, setCurrentModal] = React.useState(null),
 		[toolSettings, setToolSettings] = React.useState(defaultToolSettings),
 		[playbackStatus, setPlaybackStatus] = React.useState(defaultPlaybackStatus),
-		[leftVideo, setLeftVideo] = React.useState('/main_window/assets/test-videos/fallout-4-test-clip.mp4'),
-		[rightVideo, setRightVideo] = React.useState('/main_window/assets/test-videos/fallout-4-test-clip-3.mp4');
+		[leftVideo, setLeftVideo] = React.useState('/main_window/assets/test-videos/fallout-4-test-clip-2.mp4'),
+		[rightVideo, setRightVideo] = React.useState('/main_window/assets/test-videos/fallout-4-test-clip-4.mp4');
 
 	console.log({ toolSettings });
 
@@ -43,6 +47,8 @@ function MainContainer() {
 				toolSettings={toolSettings}
 				leftVideo={leftVideo}
 				rightVideo={rightVideo}
+                setLeftVideo={setLeftVideo}
+                setRightVideo={setRightVideo}
 				setToolSettings={setToolSettings}
 				playbackStatus={playbackStatus}
 				setPlaybackStatus={setPlaybackStatus}

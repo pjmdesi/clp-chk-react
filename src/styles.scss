@@ -62,19 +62,19 @@ button {
 
 	font-size: var(--font-size);
 
-    box-shadow: none;
+	box-shadow: none;
 
-    transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+	transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 
 	&:hover {
 		background: var(--pink);
 		box-shadow: $bevel-shadow-pop-out;
 	}
 
-    &:active {
-        background: var(--);
-        box-shadow: $bevel-shadow-sink-in;
-    }
+	&:active {
+		background: var(--);
+		box-shadow: $bevel-shadow-sink-in;
+	}
 }
 
 #root {
@@ -113,26 +113,80 @@ button {
 	--static-dark: var(--gray5);
 	--static-light: var(--gray7);
 
+	.video-info {
+		position: absolute;
+		inset: 1rem auto auto 1rem;
+
+        display: flex;
+        gap: .5rem;
+        align-items: center;
+
+		color: var(--white);
+		font-size: 1rem;
+		font-weight: 500;
+
+		width: calc(50vw - 2rem);
+		height: auto;
+
+		z-index: 4;
+
+		&.right-video-info {
+			inset: 1rem 1rem auto auto;
+            justify-content: flex-end;
+		}
+
+		.video-closer {
+			display: flex;
+			height: auto;
+
+			~ .video-closer {
+				inset: 1rem 1rem auto auto;
+			}
+
+			background: transparent;
+
+			color: var(--white);
+			svg {
+				fill: currentColor;
+				stroke: currentColor;
+			}
+
+			filter: drop-shadow(0 0 0.125rem var(--black));
+			cursor: pointer;
+
+			transform: scale(1);
+			transition: transform 0.15s ease-in-out, stroke 0.15s ease-in-out, color 0.15s ease-in-out, filter 0.15s ease-in-out;
+
+			z-index: 4;
+
+			&:hover {
+				color: var(--pink);
+				filter: drop-shadow(0 0 0.25rem var(--pink));
+				transform: scale(1.25);
+			}
+		}
+	}
+
 	label.file-input {
 		position: absolute;
 		top: 50vh;
 		left: 75vw;
 
-        &:nth-of-type(2) {
-            left: 25vw;
-        }
+		&:nth-of-type(2) {
+			left: 25vw;
+		}
 
 		display: flex;
-        flex-wrap: wrap;
-        gap: calc( 4 * var(--spacing)) 0;
+		flex-wrap: wrap;
+		gap: calc(4 * var(--spacing)) 0;
 
-        text-align: center;
+		text-align: center;
 		justify-content: center;
 		align-items: center;
-        align-content: center;
-        justify-items: center;
+		align-content: center;
+		justify-items: center;
 
-        z-index: 4;
+		z-index: 4;
 
 		width: 150px;
 		height: 150px;
@@ -147,55 +201,22 @@ button {
 
 		transform: translate(-50%, -50%);
 
-        > span {
-            grid-column: 1 / -1;
-            display: block;
-            font-weight: 500;
-            font-size: 1rem;
-        }
+		> span {
+			grid-column: 1 / -1;
+			display: block;
+			font-weight: 500;
+			font-size: 1rem;
+		}
 
 		> input {
 			display: none;
 		}
 	}
 
-    .video-closer {
-        display: flex;
-        height: auto;
-        position: absolute;
-        inset: 1rem auto auto 1rem;
-
-        ~ .video-closer {
-            inset: 1rem 1rem auto auto;
-        }
-
-        background: transparent;
-
-        color: var(--white);
-        svg {
-            fill: currentColor;
-            stroke: currentColor;
-        }
-
-        filter: drop-shadow(0 0 0.125rem var(--black));
-        cursor: pointer;
-
-        transform: scale(1);
-        transition: transform 0.15s ease-in-out, stroke 0.15s ease-in-out, color 0.15s ease-in-out, filter 0.15s ease-in-out;
-
-        z-index: 4;
-
-        &:hover {
-            color: var(--pink);
-            filter: drop-shadow(0 0 0.25rem var(--pink));
-            transform: scale(1.25);
-        }
-    }
-
 	// generate tv static
 
 	&.empty,
-    &.empty>#videoClipper {
+	&.empty > #videoClipper {
 		background:
         // repeating-radial-gradient(var(--static-dark) 0 0.0001%, var(--static-light) 0 0.0002%) 50% 0/2500px 2500px,
 			repeating-conic-gradient(var(--static-dark) 0 0.0001%, var(--static-light) 0 0.0002%) 60% 60%/2500px 2500px;
@@ -213,7 +234,7 @@ button {
 
 		will-change: contents;
 
-        z-index: 0;
+		z-index: 0;
 
 		&.divider {
 			width: 100%;
@@ -223,17 +244,16 @@ button {
 			overflow: hidden;
 		}
 
-        &.boxCutout,
+		&.boxCutout,
 		&.circleCutout {
 			// clip-path: circle(50% at 50% 50%);
 			overflow: hidden;
 			transform: translate(-50%, -50%);
-			border-radius: 50%;
 
 			box-shadow: 0 0 0 calc(var(--user-divider-thickness) + 0.75px) var(--user-divider-color);
 		}
 
-        &.circleCutout {
+		&.circleCutout {
 			border-radius: 50%;
 		}
 	}
@@ -276,7 +296,19 @@ button {
 
 	z-index: 999;
 
+    // opacity: 0;
+
 	box-shadow: 0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset, 0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+
+    transition: opacity 1s;
+    transition-delay: 1s;
+
+    #mainContainer:hover > &,
+    #mainContainer:focus-within > & {
+        opacity: 1;
+        transition-duration: .3s;
+        transition-delay: 0s;
+    }
 
 	.control-group {
 		display: flex;
@@ -353,10 +385,12 @@ button {
 				}
 			}
 
-			input {
+			.unit-input-container {
 				flex: 0 1 auto;
 
-				display: block;
+				display: flex;
+                align-items: center;
+                gap: 1ch;
 				text-align: center;
 				font-size: var(--font-size);
 				padding: var(--spacing) 8px;
@@ -364,6 +398,15 @@ button {
 				background: #08162f;
 				box-shadow: $bevel-shadow-pop-out;
 				border-radius: 10px;
+
+                input {
+                    flex: 0 1 auto;
+                    text-align: end;
+                }
+
+                span {
+                    text-wrap: nowrap;
+                }
 			}
 		}
 

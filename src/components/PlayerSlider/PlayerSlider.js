@@ -3,13 +3,13 @@ import Slider from 'rc-slider';
 // import Tooltip from 'rc-tooltip';
 import 'rc-slider/assets/index.css';
 
-function PlayerSlider({ defaultSliderValue, sliderValues = [0, 0.5, 1], stepValue = 1, name, onChange, toolOption }) {
+function PlayerSlider({ defaultSliderValue, sliderValues = [0, 0.5, 1], stepValue = 1, name, onChange, toolOption, label='' }) {
 
     if (typeof defaultSliderValue === "undefined") {
-        defaultSliderValue = sliderValues[1];
+        defaultSliderValue = Math.min(sliderValues[2], Math.max(sliderValues[0],sliderValues[1]));
     }
 
-    const [sliderValue, setSliderValue] = React.useState(sliderValues[1]);
+    const [sliderValue, setSliderValue] = React.useState(defaultSliderValue || sliderValues[1]);
 
     const changeValue = (v) => {
         // constrain value to min/max
@@ -35,7 +35,10 @@ function PlayerSlider({ defaultSliderValue, sliderValues = [0, 0.5, 1], stepValu
 	return (
 		<div className="control-slider-container">
 			<Slider min={sliderValues[0]} max={sliderValues[2]} step={stepValue} value={sliderValue} onChange={(v) => changeValue(v)} />
-            <input min={sliderValues[0]} max={sliderValues[2]} type="text" value={sliderValue} onChange={(e) => changeValue(e.target.value)} onClick={handleClick} title={name}/>
+            <div className="unit-input-container">
+                <input min={sliderValues[0]} max={sliderValues[2]} type="text" value={sliderValue} onChange={(e) => changeValue(e.target.value)} onClick={handleClick} title={name}/>
+                {label && <span>{label}</span>}
+            </div>
 		</div>
 	);
 }

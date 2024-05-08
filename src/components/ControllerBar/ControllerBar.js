@@ -6,7 +6,7 @@ import PlayerRadioButtons from '../PlayerRadioButtons';
 import ModalButton from '../ModalButton';
 import PlayerToggle from '../PlayerToggle/PlayerToggle';
 
-function ControllerBar({ toolSettings, setToolSettings, playbackStatus, setPlaybackStatus, leftVideo, rightVideo }) {
+function ControllerBar({ toolSettings, setToolSettings, playbackStatus, setPlaybackStatus, leftVideo, rightVideo, setLeftVideo, setRightVideo }) {
 	const updateToolSettings = (newSettingVal, setting) => {
 		const newSettings = { ...toolSettings };
 		newSettings[setting] = newSettingVal;
@@ -20,8 +20,20 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, setPlayb
 		const newSettings = { ...toolSettings.toolOptions };
 		newSettings[setting] = newSettingVal;
 
+        console.log({ newSettings });
+
 		updateToolSettings(newSettings, 'toolOptions');
 	};
+
+
+    const updateToolSettingOptionsValue = (newSettingVal, setting) => {
+        if (typeof setting === 'undefined') return;
+
+        const newSettings = { ...toolSettings.toolOptions.value };
+        newSettings[setting] = newSettingVal;
+
+        updateToolSettingOptions(newSettings, 'value');
+    };
 
 	const playPause = () => {
 		if (leftVideo && rightVideo) {
@@ -31,6 +43,15 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, setPlayb
 			setPlaybackStatus(newPlaybackStatus);
 			console.log({ newPlaybackStatus });
 		}
+	};
+
+	const swapVideos = () => {
+		console.log('Swapping videos');
+		const newLeftVideo = rightVideo;
+		const newRightVideo = leftVideo;
+
+		setLeftVideo(newLeftVideo);
+		setRightVideo(newRightVideo);
 	};
 
 	const toolModeSet = {
@@ -126,6 +147,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, setPlayb
 	return (
 		<div id="controllerBar">
 			<div className="control-group">
+				<PlayerControl id="swapVideosButton" iconName="Repeat" title="Swap videos" onClick={() => swapVideos()} />
 				<div className="control-radio-group">
 					<PlayerRadioButtons id="toolModeButtonSet" buttonSet={toolModeSet} value={toolSettings.toolMode} />
 				</div>
@@ -148,22 +170,24 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, setPlayb
 							<PlayerSlider
 								id="transitionSpeedSlider"
 								name="Transition Speed"
-								sliderValues={[0, toolSettings.toolOptions.value, 1]}
-								stepValue={0.01}
-								onChange={updateToolSettingOptions}
-								toolOption="value"
+								sliderValues={[1, toolSettings.toolOptions.value[toolSettings.toolMode], 60]}
+								stepValue={0.1}
+								onChange={updateToolSettingOptionsValue}
+								toolOption={toolSettings.toolMode}
+								label="/ min"
 							/>
 						</div>
 					)}
-					{toolSettings.toolMode === 'circleCutout' && (
+					{['boxCutout', 'circleCutout'].includes(toolSettings.toolMode) && (
 						<div className="control-radio-group control-radio-subgroup">
 							<PlayerSlider
-								id="clipperRadiusSlider"
-								name="Radius"
-								sliderValues={[100, toolSettings.toolOptions.value, 500]}
+								id="clipperSizeSlider"
+								name="Size"
+								sliderValues={[100, toolSettings.toolOptions.value[toolSettings.toolMode], 500]}
 								stepValue={1}
-								onChange={updateToolSettingOptions}
-								toolOption="value"
+								onChange={updateToolSettingOptionsValue}
+								toolOption={toolSettings.toolMode}
+								label="px"
 							/>
 						</div>
 					)}
