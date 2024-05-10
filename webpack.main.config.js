@@ -14,6 +14,7 @@ module.exports = {
 		new CopyPlugin({
 			patterns: [
 				{ from: 'src/preload-assets', to: '../renderer/main_window/assets' },
+				{ from: 'src/assets', to: '../renderer/main_window/assets' },
 				{ from: 'src/assets', to: './assets' },
 				// { from: 'other', to: 'public' },
 			],

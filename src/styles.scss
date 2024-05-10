@@ -1,6 +1,11 @@
 @import 'reset';
 @import '_colors';
 
+@font-face {
+    font-family: 'Recursive';
+    src: url(/src/assets/fonts/Recursive_VF_1.078.woff2) format('woff2');
+}
+
 :root {
 	--btnSize: 26px;
 	--spacing: 3px;
@@ -83,32 +88,36 @@ button {
 	border-radius: 16px;
 	// margin-top: -36px;
 
-	font: 400 16px 'Roboto', sans-serif;
+	font: 400 16px 'Recursive', 'Roboto', sans-serif;
 	color: var(--white);
 
 	min-width: 900px;
+
+	user-select: none;
 }
 
 #mainContainer {
-	display: block;
+	display: flex;
+	flex-direction: column;
 	position: relative;
 	width: 100%;
 	height: 100%;
-	border-radius: 8px;
-	background-color: var(--black);
+	// gap: 8px;
+	// background-color: var(--black);
 
-	overflow: hidden;
-
-	box-shadow: 0 1px 6px rgba($color: var(--black-rgb), $alpha: 0.8);
+	// overflow: hidden;
 }
 
-#videoContainer {
+#MediaContainer {
+	flex: 1 0 auto;
 	position: relative;
-	display: inline-block;
-	width: 100%;
-	height: 100%;
+	display: block;
+	border-radius: 8px;
+	overflow: hidden;
 
 	background-color: var(--black);
+
+	box-shadow: 0 1px 6px rgba($color: var(--black-rgb), $alpha: 0.8);
 
 	--static-dark: var(--gray5);
 	--static-light: var(--gray7);
@@ -117,9 +126,9 @@ button {
 		position: absolute;
 		inset: 1rem auto auto 1rem;
 
-        display: flex;
-        gap: .5rem;
-        align-items: center;
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
 
 		color: var(--white);
 		font-size: 1rem;
@@ -132,7 +141,17 @@ button {
 
 		&.right-video-info {
 			inset: 1rem 1rem auto auto;
-            justify-content: flex-end;
+			justify-content: flex-end;
+		}
+
+		.video-label {
+			cursor: pointer;
+			transition: color 0.15s ease-in-out, filter 0.15s ease-in-out;
+
+			&:hover {
+				color: var(--pink);
+				filter: drop-shadow(0 0 0.25rem var(--pink));
+			}
 		}
 
 		.video-closer {
@@ -170,10 +189,10 @@ button {
 	label.file-input {
 		position: absolute;
 		top: 50vh;
-		left: 75vw;
+		left: 25vw;
 
-		&:nth-of-type(2) {
-			left: 25vw;
+		&:nth-child(2) {
+			left: 75vw;
 		}
 
 		display: flex;
@@ -191,7 +210,7 @@ button {
 		width: 150px;
 		height: 150px;
 
-		background: rgba(8, 22, 47, 0.75);
+		background: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
 		box-shadow: inset 0px 3px 8px rgba(255, 255, 255, 0.1), inset 0px -3px 8px rgba(0, 0, 0, 0.25);
 		backdrop-filter: blur(4px);
 		/* Note: backdrop-filter has minimal browser support */
@@ -200,6 +219,8 @@ button {
 		appearance: none;
 
 		transform: translate(-50%, -50%);
+
+        transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
 
 		> span {
 			grid-column: 1 / -1;
@@ -211,26 +232,27 @@ button {
 		> input {
 			display: none;
 		}
+
+        &:hover {
+            background: rgba($color: var(--darker-blue-rgb), $alpha: 1);
+
+        }
 	}
 
 	// generate tv static
 
 	&.empty,
-	&.empty > #videoClipper {
+	#videoClipper.empty {
 		background:
         // repeating-radial-gradient(var(--static-dark) 0 0.0001%, var(--static-light) 0 0.0002%) 50% 0/2500px 2500px,
 			repeating-conic-gradient(var(--static-dark) 0 0.0001%, var(--static-light) 0 0.0002%) 60% 60%/2500px 2500px;
 		// background-blend-mode: color;
 		animation: static-anim 0.2s infinite alternate;
-
-		.video-label {
-			display: none;
-		}
 	}
 
 	#videoClipper {
 		position: relative;
-		box-shadow: 0 0 0 var(--user-divider-thickness) var(--user-divider-color);
+		box-shadow: 2px 0 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
 
 		will-change: contents;
 
@@ -279,53 +301,220 @@ button {
 	}
 }
 
+@keyframes position-delay-rel-to-abs {
+	from {
+		position: relative;
+	}
+	to {
+		position: absolute;
+	}
+}
+@keyframes position-delay-abs-to-rel {
+	from {
+		position: absolute;
+	}
+	to {
+		position: relative;
+	}
+}
+
 #controllerBar {
-	position: absolute;
-	width: calc(100% - 32px);
-	inset: auto 16px 16px;
-	height: 48px;
-	background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
-	border-radius: 16px;
-	padding: 8px;
+	--controller-spacing: 0px;
+
+	flex: 0 0 calc(32px + var(--controller-spacing));
+	// position: relative;
+
+	padding: calc(var(--controller-spacing) / 2);
+	inset: auto var(--controller-spacing) var(--controller-spacing);
+	border-radius: var(--controller-spacing);
+
+    background-color: var(--dark-blue);
 
 	display: grid;
-	grid: 1fr / 1fr auto 1fr;
-	gap: 8px;
-
-	backdrop-filter: blur(8px);
+	grid: 1fr 1fr / 1fr auto 1fr;
+	gap: 0 8px;
 
 	z-index: 999;
 
-    // opacity: 0;
+	transition: opacity 1s linear 1s, inset 0.5s ease-in-out 0s, padding 0.5s ease-in-out 0s, 0.5s ease-in-out 0s, border-radius 0.5s ease-in-out 0s;
 
-	box-shadow: 0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset, 0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+	&.disabled {
+		.control-slider-container,
+		.control-radio-group,
+		button,
+		label,
+		input {
+			opacity: 0.5;
+			pointer-events: none;
 
-    transition: opacity 1s;
-    transition-delay: 1s;
+			&.ignore-disabled {
+				opacity: 1;
+				pointer-events: auto;
+			}
+		}
 
-    #mainContainer:hover > &,
-    #mainContainer:focus-within > & {
-        opacity: 1;
-        transition-duration: .3s;
-        transition-delay: 0s;
-    }
+		&:after {
+			content: 'Please select 2 videos to compare.';
+			position: absolute;
+			display: flex;
+			bottom: 90%;
+			justify-content: center;
+			align-items: center;
+			background: rgba(0, 0, 0, 0.75);
+			backdrop-filter: blur(8px);
+			padding: 0.5rem 1rem;
+			border-radius: var(--radius);
+
+			left: 50%;
+			transform: translateX(-50%);
+
+			font-size: 2rem;
+			font-weight: 700;
+
+			opacity: 0;
+
+			transition: opacity 0.25s ease-in-out 0s, bottom 0.25s ease-in-out 0s;
+		}
+
+		&:hover:after {
+			opacity: 1;
+			bottom: 100%;
+		}
+	}
+
+	&.floating {
+		--controller-spacing: 16px;
+		// position: absolute;
+
+		background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+
+		opacity: 0;
+
+		box-shadow: 0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset, 0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+
+		backdrop-filter: blur(var(--controller-spacing));
+
+		animation: position-delay-rel-to-abs;
+		animation-duration: 0s;
+		animation-delay: 0s;
+		animation-fill-mode: both;
+
+		#mainContainer:hover > &,
+		#mainContainer:focus-within > & {
+			opacity: 1;
+			transition: opacity 0.3s linear 0s, inset 0.5s ease-in-out 0s, padding 0.5s ease-in-out 0s, 0.5s ease-in-out 0s, border-radius 0.5s ease-in-out 0s;
+		}
+	}
+
+	&.docked {
+		animation: position-delay-abs-to-rel;
+		animation-duration: 0s;
+		animation-delay: 0.5s;
+		animation-fill-mode: both;
+	}
+
+	#videoProgressSlider {
+		grid-column: 1 / -1;
+	}
+
+	.control-slider-container {
+		--slider-dimen: 6px;
+		--slider-spacing: 8px;
+
+		display: flex;
+		// grid: 1fr / 100px auto;
+		align-items: center;
+		gap: 4px;
+		min-width: 100px;
+
+		.rc-slider {
+			margin: var(--slider-spacing);
+			padding: unset;
+			flex: 1 0 100px;
+			height: var(--slider-dimen);
+			cursor: pointer;
+
+			.rc-slider-rail,
+			.rc-slider-track {
+				height: var(--slider-dimen);
+				border-radius: calc(var(--slider-dimen) / 2);
+			}
+
+			.rc-slider-rail {
+				background: linear-gradient(180deg, #aab6cc 0%, #7f96c0 100%);
+			}
+
+			.rc-slider-track {
+				background: linear-gradient(360deg, #ff5a46 0%, #ff7844 100%);
+			}
+
+			.rc-slider-handle {
+				width: calc(var(--slider-spacing) + var(--slider-dimen));
+				height: calc(var(--slider-spacing) + var(--slider-dimen));
+
+				margin-top: calc(-1 * var(--slider-spacing) / 2);
+
+				background: var(--pink);
+				opacity: 1;
+				border: 2px solid #ffffff;
+				border-radius: 50%;
+
+				&.rc-slider-handle-dragging {
+					box-shadow: 0 0 0 3px var(--orange);
+				}
+			}
+
+			.rc-slider-step {
+				margin-top: calc(-1 * var(--slider-spacing));
+				margin-bottom: calc(-1 * var(--slider-spacing));
+			}
+		}
+
+		.unit-input-container {
+			flex: 0 0;
+
+			// width: min-content;
+			// min-width: 0;
+			display: flex;
+			align-items: center;
+			gap: 0.5ch;
+			text-align: center;
+			font-size: var(--font-size);
+			padding: var(--spacing) 8px;
+
+			background: #08162f;
+			box-shadow: $bevel-shadow-pop-out;
+			border-radius: 10px;
+
+			input {
+				text-align: center;
+				width: fit-content;
+				min-width: 0;
+				max-width: fit-content;
+			}
+
+			span {
+				text-wrap: nowrap;
+			}
+		}
+	}
 
 	.control-group {
 		display: flex;
 		align-items: center;
 		gap: 4px;
 
-		&:nth-child(1) {
+		&:nth-child(2) {
 			flex: 0 1 auto;
 			justify-content: flex-start;
 		}
 
-		&:nth-child(2) {
+		&:nth-child(3) {
 			min-width: fit-content;
 			justify-content: center;
 		}
 
-		&:nth-child(3) {
+		&:nth-child(4) {
 			flex: 1 0 auto;
 			justify-content: space-between;
 		}
@@ -338,76 +527,6 @@ button {
 
 			--btnSize: 20px;
 			--font-size: 12px;
-		}
-
-		.control-slider-container {
-			--slider-dimen: 6px;
-			--slider-spacing: 10px;
-
-			display: flex;
-			// grid: 1fr / 100px auto;
-			align-items: center;
-			gap: 4px;
-			min-width: 100px;
-
-			.rc-slider {
-				margin: auto var(--slider-spacing);
-				padding: unset;
-				flex: 1 0 100px;
-				height: var(--slider-dimen);
-
-				.rc-slider-rail,
-				.rc-slider-track {
-					height: var(--slider-dimen);
-					border-radius: calc(var(--slider-dimen) / 2);
-				}
-
-				.rc-slider-rail {
-					background: linear-gradient(180deg, #aab6cc 0%, #7f96c0 100%);
-				}
-
-				.rc-slider-track {
-					background: linear-gradient(360deg, #ff5a46 0%, #ff7844 100%);
-				}
-
-				.rc-slider-handle {
-					width: calc(var(--slider-spacing) + var(--slider-dimen));
-					height: calc(var(--slider-spacing) + var(--slider-dimen));
-
-					background: var(--pink);
-					opacity: 1;
-					border: 2px solid #ffffff;
-					border-radius: 50%;
-
-					&.rc-slider-handle-dragging {
-						box-shadow: 0 0 0 3px var(--orange);
-					}
-				}
-			}
-
-			.unit-input-container {
-				flex: 0 1 auto;
-
-				display: flex;
-                align-items: center;
-                gap: 1ch;
-				text-align: center;
-				font-size: var(--font-size);
-				padding: var(--spacing) 8px;
-
-				background: #08162f;
-				box-shadow: $bevel-shadow-pop-out;
-				border-radius: 10px;
-
-                input {
-                    flex: 0 1 auto;
-                    text-align: end;
-                }
-
-                span {
-                    text-wrap: nowrap;
-                }
-			}
 		}
 
 		label:has(input[type='checkbox']),

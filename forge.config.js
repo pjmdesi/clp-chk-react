@@ -1,10 +1,11 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+const path = require('path');
 
 module.exports = {
 	packagerConfig: {
 		asar: true,
-        icon: 'app-icon',
+        icon: path.join(__dirname, 'assets/images', 'app-icon.png'),
 	},
 	rebuildConfig: {},
 	makers: [
@@ -37,7 +38,7 @@ module.exports = {
 		{
 			name: '@electron-forge/plugin-webpack',
 			config: {
-                devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' data: filesystem:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:; media-src 'self' 'unsafe-inline' data: filesystem; media-loader 'self' 'unsafe-inline' data: filesystem:;",
+                devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' data: filesystem:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:; media-src 'self' 'unsafe-inline' data: filesystem:;",
 				mainConfig: './webpack.main.config.js',
 				renderer: {
 					config: './webpack.renderer.config.js',

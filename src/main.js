@@ -1,6 +1,6 @@
 import { setupTitlebar, attachTitlebarToWindow } from 'custom-electron-titlebar/main';
 
-const { app, session, protocol, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, session, protocol, BrowserWindow, Menu, ipcMain, shell, ipcRenderer, contextBridge } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -56,8 +56,6 @@ protocol.registerSchemesAsPrivileged([
 const createWindow = () => {
 	// Create the browser window.
 
-	console.log(path.join(__dirname, 'assets/images', 'app-icon.png'));
-
 	const mainWindow = new BrowserWindow({
 		// Leave room for devtools when in development
 		width: 1000 + DEV * 600,
@@ -72,8 +70,10 @@ const createWindow = () => {
 		setBackgroundColor: '#0E2144',
 		webPreferences: {
 			nodeIntegration: true,
-			contextIsolation: !DEV,
+			contextIsolation: true,
 			preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+			webSecurity: !DEV,
+			allowRunningInsecureContent: false,
 		},
 	});
 
@@ -101,16 +101,6 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-	protocol.handle('media-loader', (request, callback) => {
-		const url = request.url.replace('media-loader://', '');
-        console.log({url});
-		try {
-			return callback(url);
-		} catch (err) {
-			console.error(err);
-			return callback(404);
-		}
-	});
 
 	createWindow();
 
@@ -132,18 +122,13 @@ app.on('window-all-closed', () => {
 	}
 });
 
-ipcMain.on('toMain', (event, args) => {
-	fs.readFile('path/to/file', (error, data) => {
-		// Do something with file contents
+// open file with default application
+ipcMain.on('open-file', filePath => {
+	// Open the given file in the desktop's default manner.
+	const file = shell.openPath(filePath);
 
-		// Send result back to renderer process
-		win.webContents.send('fromMain', responseObj);
-	});
+    console.log({file});
+
+	// Show the given file in a file manager. If possible, select the file.
+	shell.showItemInFolder(filePath);
 });
-
-ipcMain.handle('my-invokable-ipc', async (event, ...args) => {
-    const result = await somePromise(...args)
-    return result
-  })
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
