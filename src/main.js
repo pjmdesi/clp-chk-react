@@ -66,6 +66,7 @@ const createWindow = () => {
 		titleBarOverlay: !DEV,
 		transparent: !DEV,
 		frame: DEV,
+        sandbox: false,
 		icon: path.join(__dirname, 'assets/images', 'app-icon.png'),
 		setBackgroundColor: '#0E2144',
 		webPreferences: {
@@ -88,7 +89,7 @@ const createWindow = () => {
 	mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
 	// Open the DevTools.
-	DEV && mainWindow.webContents.openDevTools();
+	mainWindow.webContents.openDevTools();
 
 	DEV &&
 		setTimeout(() => {

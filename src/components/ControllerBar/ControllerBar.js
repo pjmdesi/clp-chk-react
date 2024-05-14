@@ -8,7 +8,6 @@ import PlayerToggle from '../PlayerToggle/PlayerToggle';
 import Icon from '../Icon';
 
 function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedia, rightMedia, setLeftMedia, setRightMedia, PlayerControls }) {
-
 	const updateToolSettings = (newSettingVal, setting) => {
 		const newSettings = { ...toolSettings };
 		newSettings[setting] = newSettingVal;
@@ -152,7 +151,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 	};
 
 	return (
-		<div id="controllerBar" className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'} ${(!leftMedia || !rightMedia) ? ' disabled' : ''}`}>
+		<div id="controllerBar" className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${!leftMedia || !rightMedia ? ' disabled' : ''}`}>
 			<PlayerSlider
 				id="videoProgressSlider"
 				name="Tool Size"
@@ -160,10 +159,13 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 				value={playbackStatus.playbackPosition}
 				stepValue={0.01}
 				onChange={PlayerControls.setCurrentTime}
+				onBeforeChange={() => {
+					PlayerControls.pause();
+				}}
 				useSignificantFigures
 			/>
 			<div className="control-group">
-				<PlayerControl id="swapMediasButton" iconName="Repeat" title="Swap videos" onClick={() => swapMedias()} />
+				<PlayerControl id="swapMediasButton" iconName="GitCompareArrows" title="Swap videos" onClick={() => swapMedias()} />
 				<PlayerRadioButtons id="toolModeButtonSet" buttonSet={toolModeSet} value={toolSettings.toolMode} />
 				<div className="control-subgroup">
 					{toolSettings.toolMode === 'divider' && (
@@ -211,12 +213,19 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 					<PlayerControl id="stepBackButton" iconName="StepBack" onClick={() => PlayerControls.skip(-0.1)} />
 					<PlayerControl id="playPauseButton" iconName={playbackStatus.playbackState === 'playing' ? 'Pause' : 'Play'} onClick={() => PlayerControls.playPause()} />
 					<PlayerControl id="stepForwardButton" iconName="StepForward" onClick={() => PlayerControls.skip(0.1)} />
-					<PlayerControl id="skipForwardButton" iconName="SkipForward" onClick={() => PlayerControls.setCurrentTime(playbackStatus.playbackEndTime - .1)} />
+					<PlayerControl id="skipForwardButton" iconName="SkipForward" onClick={() => PlayerControls.setCurrentTime(playbackStatus.playbackEndTime - 0.1)} />
 				</div>
 			</div>
 			<div className="control-group">
 				<div className="control-subgroup">
-					<PlayerToggle id="playLoopToggle" iconName="Infinity" onChange={updateToolSettings} value={toolSettings.playerLoop} option="playerLoop" title="Loop Medias" />
+					<PlayerToggle
+						id="playLoopToggle"
+						iconName="IterationCw"
+						onChange={updateToolSettings}
+						value={toolSettings.playerLoop}
+						option="playerLoop"
+						title="Loop Medias"
+					/>
 					<PlayerRadioButtons id="playerSpeedButtonSet" buttonSet={playerSpeedSet} value={toolSettings.playerSpeed} autoFold />
 					{toolSettings.playerSpeed === 8 && (
 						<button title="Warning: 8x speed might cause performance issue such as de-sync and frame skipping" disabled>
@@ -232,7 +241,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 						onChange={updateControllerBarOptions}
 						value={toolSettings.controllerBarOptions.floating}
 						option="floating"
-                        className="ignore-disabled"
+						className="ignore-disabled"
 					/>
 					{/* <PlayerControl id="settingsButton" iconName="SlidersVertical" title="Settings" className="ignore-disabled"/>
 					<ModalButton id="infoButton" iconName="Info" title="About this App" className="ignore-disabled"/> */}

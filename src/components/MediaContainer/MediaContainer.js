@@ -2,10 +2,9 @@ import React from 'react';
 
 import MediaFileInput from '../MediaFileInput';
 import Icon from '../Icon';
-import { Play } from 'lucide-react';
 
 function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMedia, rightMedia, setLeftMedia, setRightMedia, PlayerControls }) {
-	const MediaContainer = React.useRef(),
+	const mediaContainerElem = React.useRef(),
 		leftMediaElem = React.useRef(),
 		rightMediaElem = React.useRef(),
 		videoClipper = React.useRef();
@@ -13,6 +12,7 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 	const [leftMediaLabel, setLeftMediaLabel] = React.useState('Left Media'),
 		[rightMediaLabel, setRightMediaLabel] = React.useState('Right Media'),
 		[clipperStyle, setClipperStyle] = React.useState({ width: '50%' }),
+		[clipperFlip, setClipperFlip] = React.useState(false),
 		[clippedMediaStyle, setClippedMediaStyle] = React.useState({ minWidth: '200%', zIndex: 3 }),
 		continuousClipInterval = React.useRef(null);
 
@@ -27,12 +27,11 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 				leftMediaElem.current.pause();
 				rightMediaElem.current.pause();
 
-                if (playbackStatus.playbackPosition !== leftMediaElem.current.currentTime) {
-                    leftMediaElem.current.currentTime = playbackStatus.playbackPosition;
-                    rightMediaElem.current.currentTime = playbackStatus.playbackPosition;
-                }
+				if (playbackStatus.playbackPosition !== leftMediaElem.current.currentTime) {
+					leftMediaElem.current.currentTime = playbackStatus.playbackPosition;
+					rightMediaElem.current.currentTime = playbackStatus.playbackPosition;
+				}
 			}
-
 		}
 	}, [playbackStatus, leftMedia, rightMedia]);
 
@@ -40,8 +39,11 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 		clearInterval(continuousClipInterval.current);
 		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) {
 			clipMediaContinuous();
+		} else {
+			clearInterval(continuousClipInterval.current);
+			clipMedia();
 		}
-	}, [toolSettings]);
+	}, [toolSettings.toolMode, toolSettings.toolOptions]);
 
 	React.useEffect(() => {
 		const newToolSettings = { ...toolSettings };
@@ -74,7 +76,6 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 		} else {
 			setRightMediaLabel('');
 		}
-
 	}, [leftMedia, rightMedia]);
 
 	React.useEffect(() => {
@@ -82,8 +83,11 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 	}, [toolSettings.playerSpeed]);
 
 	React.useEffect(() => {
-		updateMediaLoopOption();
-	}, [toolSettings.playerLoop]);
+		if (leftMedia && rightMedia) {
+			leftMediaElem.current.volume = toolSettings.playerAudio.left.volume;
+			rightMediaElem.current.volume = toolSettings.playerAudio.right.volume;
+		}
+	}, [toolSettings.playerAudio]);
 
 	const handleLoadedMetadata = video => {
 		const currentPlaybackEndTime = playbackStatus.playbackEndTime;
@@ -97,17 +101,8 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 		}
 	};
 
-    const handleTimeUpdate = e => {
-        if (leftMedia && rightMedia) {
-            PlayerControls.setCurrentTime(e.target.currentTime);
-        }
-    };
-
-	const updateMediaLoopOption = () => {
-		if (leftMedia && rightMedia) {
-			leftMediaElem.current.loop = toolSettings.playerLoop;
-			rightMediaElem.current.loop = toolSettings.playerLoop;
-		}
+	const handleTimeUpdate = e => {
+		PlayerControls.setCurrentTime(e.target.currentTime);
 	};
 
 	const updateMediaPlaybackSpeed = () => {
@@ -115,14 +110,6 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 			leftMediaElem.current.playbackRate = toolSettings.playerSpeed;
 			rightMediaElem.current.playbackRate = toolSettings.playerSpeed;
 		}
-	};
-
-	const setLeftMediaFile = file => {
-		setLeftMedia(file);
-	};
-
-	const setRightMediaFile = file => {
-		setRightMedia(file);
 	};
 
 	const openMediaFile = mediaFile => {
@@ -138,12 +125,22 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 	const clipMedia = event => {
 		if (!(leftMedia && rightMedia)) return;
 
-		let vidContElem = MediaContainer.current,
-			cursor = { x: event.pageX, y: event.pageY };
+		const mediaContElem = mediaContainerElem.current;
+		const containerOffset = {
+			left: mediaContElem.getBoundingClientRect().left,
+			top: mediaContElem.getBoundingClientRect().top,
+		};
+
+		if (!event) {
+			event = { pageX: mediaContElem.offsetWidth / 2, pageY: mediaContElem.offsetHeight / 2 };
+			containerOffset.left = 0;
+			containerOffset.top = 0;
+		}
+
+		let cursor = { x: event.pageX, y: event.pageY };
 
 		if (toolSettings.toolMode === 'divider') {
-			let rect = vidContElem.getBoundingClientRect(),
-				position = ((cursor.x - rect.left) / vidContElem.offsetWidth) * 100;
+			let position = ((cursor.x - containerOffset.left) / mediaContElem.offsetWidth) * 100;
 
 			if (position <= 100) {
 				setClipperStyle({ width: position + '%' });
@@ -156,11 +153,10 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 				radius: toolSettings.toolOptions.value[toolSettings.toolMode],
 			};
 
-			let rect = vidContElem.getBoundingClientRect(),
-				clipperPos = {
-					x: ((event.pageX - rect.left) / vidContElem.offsetWidth) * 100,
-					y: ((event.pageY - rect.top) / vidContElem.offsetHeight) * 100,
-				};
+			let clipperPos = {
+				x: ((event.pageX - containerOffset.left) / mediaContElem.offsetWidth) * 100,
+				y: ((event.pageY - containerOffset.top) / mediaContElem.offsetHeight) * 100,
+			};
 
 			if (clipperPos.x <= 100 && clipperPos.y <= 100) {
 				setClipperStyle({
@@ -170,26 +166,39 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 					top: clipperPos.y + '%',
 				});
 
+				// Set the clipper to flipped if it's on the right side of the screen
+				setClipperFlip(clipperPos.x > ((mediaContElem.offsetWidth - circleSettings.radius) / mediaContElem.offsetWidth) * 100);
+
 				const videoScale = {
-					x: (1 / ((circleSettings.radius * 2) / vidContElem.offsetWidth)) * 100,
-					y: (1 / ((circleSettings.radius * 2) / vidContElem.offsetHeight)) * 100,
+					x: (1 / ((circleSettings.radius * 2) / mediaContElem.offsetWidth)) * 100,
+					y: (1 / ((circleSettings.radius * 2) / mediaContElem.offsetHeight)) * 100,
 				};
+
+				const mediaContainerH = mediaContElem.offsetHeight;
+
+				const clippedVideoOffset = mediaContainerH > circleSettings.radius * 2 ? 0 : (circleSettings.radius * 2 - mediaContainerH) / 2;
 
 				setClippedMediaStyle({
 					minWidth: videoScale.x + '%',
 					minHeight: videoScale.y + '%',
-					left: -(clipperPos.x / 100) * vidContElem.offsetWidth + leftMediaElem.current.offsetWidth / 2 + circleSettings.radius,
-					top: -(clipperPos.y / 100) * vidContElem.offsetHeight + circleSettings.radius,
+					left: -(clipperPos.x / 100) * mediaContElem.offsetWidth + leftMediaElem.current.offsetWidth / 2 + circleSettings.radius,
+					top: circleSettings.radius - clippedVideoOffset - (clipperPos.y / 100) * mediaContElem.offsetHeight,
 				});
 			}
 		}
 	};
 
 	const clipMediaContinuous = () => {
+		// Force turn off stick mode
+		const newToolSettings = { ...toolSettings };
+		newToolSettings.stick = false;
+
+		setToolSettings(newToolSettings);
+
 		let position = toolSettings.toolOptions.type === 'rightToLeft' ? 100 : 0,
 			positionDirection = 1,
 			timingSegment = 10,
-			vidContElem = MediaContainer.current;
+			mediaContElem = mediaContainerElem.current;
 
 		const positionDeltaScale = toolSettings.toolOptions.value.divider / 60;
 
@@ -204,26 +213,34 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 				position += positionDirection * positionDeltaScale;
 			}
 
-			clipMedia({ pageX: (position / 100) * vidContElem.offsetWidth, pageY: 0 });
+			clipMedia({ pageX: (position / 100) * mediaContElem.offsetWidth, pageY: 0 });
 		}, timingSegment);
 	};
 
-	const handleMouseMove = event => {
+	const moveClipperWithMouse = event => {
 		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) return;
+		if (toolSettings.stick) return;
 		clipMedia(event);
 	};
 
-	MediaContainer.onmousemove = function (event) {};
+	const toggleClipperLock = e => {
+		if (e.target.parentElement.id !== 'mediaContainer' && e.target.parentElement.id !== 'videoClipper') return;
+		if (!leftMedia || !rightMedia) return;
+		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) return;
+		setToolSettings({ ...toolSettings, stick: !toolSettings.stick });
+	};
+
+	mediaContainerElem.onmousemove = function (event) {};
 
 	window.onkeyup = function (keyEvent) {
 		if (keyEvent.code === 'Space') {
 			PlayerControls.playPause();
 		}
-        if (keyEvent.code === 'ArrowLeft') {
-            PlayerControls.skip(-.1);
-        }
+		if (keyEvent.code === 'ArrowLeft') {
+			PlayerControls.skip(-0.1);
+		}
 		if (keyEvent.code === 'ArrowRight') {
-			PlayerControls.skip(.1);
+			PlayerControls.skip(0.1);
 		}
 	};
 
@@ -257,12 +274,8 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 		}
 	};
 
-	const togglePlayPause = () => {
-		setPlaybackStatus({ ...playbackStatus, playbackState: playbackStatus.playbackState === 'paused' ? 'playing' : 'paused' });
-	};
-
 	return (
-		<div id="MediaContainer" ref={MediaContainer} onMouseMove={handleMouseMove} className={rightMedia ? '' : 'empty'}>
+		<div id="mediaContainer" ref={mediaContainerElem} onMouseMove={moveClipperWithMouse} className={rightMedia ? '' : 'empty'} onClick={e => toggleClipperLock(e)}>
 			{leftMedia ? (
 				<div className="video-info left-video-info">
 					<button className="video-closer" type="button" onClick={() => setLeftMedia('')}>
@@ -271,18 +284,39 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 					<p className="video-label" onClick={() => openMediaFile(leftMedia)}>
 						{leftMediaLabel}
 					</p>
+					<button
+						className="video-audio-mute"
+						type="button"
+						onClick={() => {
+							const newToolSettings = { ...toolSettings };
+							newToolSettings.playerAudio.left.muted = !newToolSettings.playerAudio.left.muted;
+							setToolSettings(newToolSettings);
+						}}>
+						<Icon name={toolSettings.playerAudio.left.muted?"VolumeX":"Volume2"} color={toolSettings.playerAudio.left.muted?'yellow':'white'} />
+					</button>
 					<button className="video-meta-data" type="button">
 						<Icon name="Info" />
 					</button>
 				</div>
 			) : (
-				<MediaFileInput setMediaFile={setLeftMediaFile} />
+				<MediaFileInput setMediaFile={setLeftMedia} />
 			)}
 			{rightMedia ? (
 				<>
 					<div className="video-info right-video-info">
 						<button className="video-meta-data" type="button">
 							<Icon name="Info" />
+						</button>
+						<button
+							className="video-audio-mute"
+							type="button"
+							onClick={() => {
+								const newToolSettings = { ...toolSettings };
+								newToolSettings.playerAudio.right.muted = !newToolSettings.playerAudio.right.muted;
+
+								setToolSettings(newToolSettings);
+							}}>
+							<Icon name={toolSettings.playerAudio.right.muted?"VolumeX":"Volume2"}  color={toolSettings.playerAudio.right.muted?'yellow':'white'} />
 						</button>
 						<p className="video-label" onClick={() => openMediaFile(rightMedia)}>
 							{rightMediaLabel}
@@ -291,14 +325,40 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 							<Icon name="X" />
 						</button>
 					</div>
-					<video ref={rightMediaElem} id="right-video" onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} src={rightMedia ? `${rightMedia}` : ''}/>
+					<video
+						ref={rightMediaElem}
+						id="right-video"
+						onTimeUpdate={handleTimeUpdate}
+						controls={false}
+						onLoadedMetadata={handleLoadedMetadata}
+						src={rightMedia ? `${rightMedia}` : ''}
+						loop={toolSettings.playerLoop}
+						onEnded={() => PlayerControls.pause()}
+                        muted={toolSettings.playerAudio.right.muted}
+					/>
 				</>
 			) : (
-				<MediaFileInput setMediaFile={setRightMediaFile} />
+				<MediaFileInput setMediaFile={setRightMedia} />
 			)}
-			<div id="videoClipper" ref={videoClipper} style={clipperStyle} className={`${toolSettings.toolMode}${leftMedia ? '' : ' empty'}`}>
+			<div
+				id="videoClipper"
+				ref={videoClipper}
+				style={clipperStyle}
+				className={`${toolSettings.toolMode}${leftMedia ? '' : ' empty'}${toolSettings.stick ? ' stuck' : ''}${
+					toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto ? ' auto' : ''
+				}${clipperFlip ? ' flipped' : ''}`}>
 				{leftMedia && (
-					<video ref={leftMediaElem} id="left-video" style={clippedMediaStyle} onLoadedMetadata={handleLoadedMetadata} src={leftMedia ? `${leftMedia}` : ''} />
+					<video
+						ref={leftMediaElem}
+						id="left-video"
+						style={clippedMediaStyle}
+						controls={false}
+						onLoadedMetadata={handleLoadedMetadata}
+						src={leftMedia ? `${leftMedia}` : ''}
+						loop={toolSettings.playerLoop}
+						onEnded={() => PlayerControls.pause()}
+                        muted={toolSettings.playerAudio.left.muted}
+					/>
 				)}
 			</div>
 		</div>

@@ -13,9 +13,11 @@ const defaultToolSettings = {
 		auto: false,
 		// (Divider only) The animation pattern for the divider
 		type: 'backAndForth',
+        // Fix the position of the clipper
+        stick: false,
 		// Settings values for the tools, each tool has its own settings
 		value: {
-			divider: 10,
+			divider: 30,
 			boxCutout: 200,
 			circleCutout: 200,
 		},
@@ -30,6 +32,16 @@ const defaultToolSettings = {
 	playerLoop: true,
 	// The amount of time to skip when the user clicks the skip button in ms
 	playerSkipTime: 100,
+    playerAudio: {
+        left: {
+            volume: .8,
+            muted: true,
+        },
+        right: {
+            volume: .8,
+            muted: true,
+        },
+    },
 };
 
 function MainContainer() {
@@ -41,12 +53,16 @@ function MainContainer() {
         playbackEndTime: 0,
 	};
 
+    const leftMediaFromMemory = localStorage.getItem('leftMedia') || '';
+    const rightMediaFromMemory = localStorage.getItem('rightMedia') || '';
+
 	const [toolSettings, setToolSettings] = React.useState(defaultToolSettings),
 		[playbackStatus, setPlaybackStatus] = React.useState(defaultPlaybackStatus),
-		[leftMedia, setLeftMedia] = React.useState(''),
-		[rightMedia, setRightMedia] = React.useState('');
+		[leftMedia, setLeftMedia] = React.useState(leftMediaFromMemory),
+		[rightMedia, setRightMedia] = React.useState(rightMediaFromMemory);
 
-        console.log({playbackStatus});
+        // console.log({playbackStatus});
+        // console.log({toolSettings});
 
 	const PlayerControls = {
 		playPause: () => {
@@ -57,6 +73,22 @@ function MainContainer() {
 				setPlaybackStatus(newPlaybackStatus);
 			}
 		},
+        play: () => {
+            if (leftMedia && rightMedia) {
+                const newPlaybackStatus = { ...playbackStatus };
+                newPlaybackStatus.playbackState = 'playing';
+
+                setPlaybackStatus(newPlaybackStatus);
+            }
+        },
+        pause: () => {
+            if (leftMedia && rightMedia) {
+                const newPlaybackStatus = { ...playbackStatus };
+                newPlaybackStatus.playbackState = 'paused';
+
+                setPlaybackStatus(newPlaybackStatus);
+            }
+        },
 		skip: time => {
 			if (leftMedia && rightMedia) {
 				const newPlaybackStatus = { ...playbackStatus };
@@ -82,6 +114,14 @@ function MainContainer() {
             }
         },
 	};
+
+    React.useEffect(() => {
+        localStorage.setItem('leftMedia', leftMedia);
+    }, [leftMedia]);
+
+    React.useEffect(() => {
+        localStorage.setItem('rightMedia', rightMedia);
+    }, [rightMedia]);
 
 	return (
 		<div id="mainContainer">

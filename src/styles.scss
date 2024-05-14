@@ -108,12 +108,24 @@ button {
 	// overflow: hidden;
 }
 
-#MediaContainer {
-	flex: 1 0 auto;
+
+#mediaContainer {
+    --controller-offset: 64px;
+
+    cursor: pointer;
+
+    &.empty,
+    &:has(.auto) {
+        cursor: default;
+    }
+
+    flex: 1 0 auto;
 	position: relative;
 	display: block;
 	border-radius: 8px;
 	overflow: hidden;
+
+    height: calc( 100% - var(--controller-offset) );
 
 	background-color: var(--black);
 
@@ -133,6 +145,7 @@ button {
 		color: var(--white);
 		font-size: 1rem;
 		font-weight: 500;
+        filter: drop-shadow(0 0 0.125rem var(--black));
 
 		width: calc(50vw - 2rem);
 		height: auto;
@@ -147,6 +160,7 @@ button {
 		.video-label {
 			cursor: pointer;
 			transition: color 0.15s ease-in-out, filter 0.15s ease-in-out;
+
 
 			&:hover {
 				color: var(--pink);
@@ -187,12 +201,14 @@ button {
 	}
 
 	label.file-input {
+        --input-size: 150px;
+        --input-offset: 25%;
 		position: absolute;
-		top: 50vh;
-		left: 25vw;
+		top: calc( 50% - var(--input-size) / 2 );
+		left: calc( var(--input-offset) - var(--input-size) / 2 );
 
 		&:nth-child(2) {
-			left: 75vw;
+            --input-offset: 75%;
 		}
 
 		display: flex;
@@ -207,8 +223,8 @@ button {
 
 		z-index: 4;
 
-		width: 150px;
-		height: 150px;
+		width: var(--input-size);
+		height: var(--input-size);;
 
 		background: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
 		box-shadow: inset 0px 3px 8px rgba(255, 255, 255, 0.1), inset 0px -3px 8px rgba(0, 0, 0, 0.25);
@@ -217,8 +233,6 @@ button {
 		border-radius: 16px;
 
 		appearance: none;
-
-		transform: translate(-50%, -50%);
 
         transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
 
@@ -258,21 +272,57 @@ button {
 
 		z-index: 0;
 
+        --icon-url: url("data:image/svg+xml, <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-unlock' viewBox='0 0 16 16'><path d='M11 1a2 2 0 0 0-2 2v4a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h5V3a3 3 0 0 1 6 0v4a.5.5 0 0 1-1 0V3a2 2 0 0 0-2-2M3 8a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1z'/></svg>");
+        --icon-color: var(--white);
+
+        &:after {
+            content: '';
+            background: var(--icon-color);
+            mask-image: var(--icon-url);
+            mask-size: contain;
+            mask-repeat: no-repeat;
+            position: absolute;
+
+            inset: 50% var(--spacing) auto auto;
+            width: 1.25rem;
+            height: 1.25rem;
+
+            transform: translateY(-50%);
+
+            z-index: 4;
+        }
+
+        &.auto:after {
+            content: none;
+        }
+
+        &.flipped:after {
+            inset: 50% auto auto var(--spacing);
+        }
+
+        &.stuck {
+            --icon-url: url("data:image/svg+xml, <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' viewBox='0 0 16 16'><path d='M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2'/></svg>");
+            --icon-color: var(--pink);
+        }
+
 		&.divider {
 			width: 100%;
 			height: 100%;
 			top: 0;
 			bottom: 0;
 			overflow: hidden;
+
 		}
 
 		&.boxCutout,
 		&.circleCutout {
-			// clip-path: circle(50% at 50% 50%);
+            // clip-path: circle(50% at 50% 50%);
 			overflow: hidden;
 			transform: translate(-50%, -50%);
 
 			box-shadow: 0 0 0 calc(var(--user-divider-thickness) + 0.75px) var(--user-divider-color);
+
+            transition: border-radius 0.25s ease-in-out, box-shadow .25s ease-in-out;
 		}
 
 		&.circleCutout {
@@ -322,11 +372,10 @@ button {
 	--controller-spacing: 0px;
 
 	flex: 0 0 calc(32px + var(--controller-spacing));
-	// position: relative;
 
 	padding: calc(var(--controller-spacing) / 2);
 	inset: auto var(--controller-spacing) var(--controller-spacing);
-	border-radius: var(--controller-spacing);
+	border-radius: 0 0 8px 8px;
 
     background-color: var(--dark-blue);
 
@@ -387,6 +436,8 @@ button {
 		// position: absolute;
 
 		background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+	    border-radius: var(--controller-spacing);
+
 
 		opacity: 0;
 
@@ -465,8 +516,12 @@ button {
 			}
 
 			.rc-slider-step {
-				margin-top: calc(-1 * var(--slider-spacing));
-				margin-bottom: calc(-1 * var(--slider-spacing));
+                position: absolute;
+                top: calc(var(--slider-spacing) * -1);
+                bottom: calc(var(--slider-spacing) * -1);
+                left: 0;
+                right: 0;
+                height: auto;
 			}
 		}
 

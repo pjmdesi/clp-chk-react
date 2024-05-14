@@ -5,13 +5,18 @@ const path = require('path');
 module.exports = {
 	packagerConfig: {
 		asar: true,
-        icon: path.join(__dirname, 'assets/images', 'app-icon.png'),
+		icon: './src/assets/images/app-icon',
 	},
 	rebuildConfig: {},
 	makers: [
 		{
 			name: '@electron-forge/maker-squirrel',
-			config: {},
+			config: {
+				options: {
+                    setupIcon: './src/assets/images/app-icon.ico',
+					icon: './src/assets/images/app-icon.ico',
+				},
+			},
 		},
 		{
 			name: '@electron-forge/maker-zip',
@@ -20,10 +25,16 @@ module.exports = {
 		{
 			name: '@electron-forge/maker-deb',
 			config: {
-                options: {
-                    icon: './assets/images/app-icon.png',
-                }
-            },
+				options: {
+					icon: './src/assets/images/app-icon.png',
+				},
+			},
+		},
+		{
+			name: '@rabbitholesyndrome/electron-forge-maker-portable',
+			config: {
+				icon: './assets/images/app-icon.ico',
+			},
 		},
 		{
 			name: '@electron-forge/maker-rpm',
@@ -38,7 +49,8 @@ module.exports = {
 		{
 			name: '@electron-forge/plugin-webpack',
 			config: {
-                devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' data: filesystem:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:; media-src 'self' 'unsafe-inline' data: filesystem:;",
+				devContentSecurityPolicy:
+					"default-src 'self' 'unsafe-inline' data: filesystem:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:; media-src 'self' 'unsafe-inline' data: filesystem:;",
 				mainConfig: './webpack.main.config.js',
 				renderer: {
 					config: './webpack.renderer.config.js',
