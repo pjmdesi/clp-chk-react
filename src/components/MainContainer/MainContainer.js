@@ -4,7 +4,7 @@ import MediaContainer from '../MediaContainer';
 import ControllerBar from '../ControllerBar';
 
 // Set the defaults for starting the app
-const defaultToolSettings = {
+let defaultToolSettings = {
 	// Which tool to use
 	toolMode: 'divider',
 	// Options for the tool
@@ -26,6 +26,8 @@ const defaultToolSettings = {
 		floating: false,
 		position: 'bottom',
 	},
+    zoomScale: 1,
+    swapScrollDirections: false,
 	// Playback speed for the video
 	playerSpeed: 1,
 	// Whether to loop the video
@@ -44,6 +46,12 @@ const defaultToolSettings = {
     },
 };
 
+let defaultAppSettings = {
+    // Whether to show the tutorial
+    showTutorial: true,
+    swapScrollDirections: false,
+};
+
 function MainContainer() {
 	const defaultPlaybackStatus = {
 		// Whether the video is playing or paused
@@ -56,10 +64,21 @@ function MainContainer() {
     const leftMediaFromMemory = localStorage.getItem('leftMedia') || '';
     const rightMediaFromMemory = localStorage.getItem('rightMedia') || '';
 
+    const toolMemory = localStorage.getItem('toolSettings') || '';
+
+    let appSettingsMemory = localStorage.getItem('appSettings') || '';
+
+    if (toolMemory) {
+        defaultToolSettings = JSON.parse(toolMemory);
+    } else {
+        localStorage.setItem('toolSettings', JSON.stringify(defaultToolSettings));
+    };
+
 	const [toolSettings, setToolSettings] = React.useState(defaultToolSettings),
 		[playbackStatus, setPlaybackStatus] = React.useState(defaultPlaybackStatus),
 		[leftMedia, setLeftMedia] = React.useState(leftMediaFromMemory),
-		[rightMedia, setRightMedia] = React.useState(rightMediaFromMemory);
+		[rightMedia, setRightMedia] = React.useState(rightMediaFromMemory),
+        [appSettings, setAppSettings] = React.useState(appSettingsMemory);
 
         // console.log({playbackStatus});
         // console.log({toolSettings});
@@ -123,10 +142,15 @@ function MainContainer() {
         localStorage.setItem('rightMedia', rightMedia);
     }, [rightMedia]);
 
+    React.useEffect(() => {
+        localStorage.setItem('toolSettings', JSON.stringify(toolSettings));
+    }, [toolSettings]);
+
 	return (
 		<div id="mainContainer">
 			<MediaContainer
 				toolSettings={toolSettings}
+                appSettings={appSettings}
 				setToolSettings={setToolSettings}
 				playbackStatus={playbackStatus}
 				leftMedia={leftMedia}
@@ -137,6 +161,7 @@ function MainContainer() {
 			/>
 			<ControllerBar
 				toolSettings={toolSettings}
+                appSettings={appSettings}
 				leftMedia={leftMedia}
 				rightMedia={rightMedia}
 				setLeftMedia={setLeftMedia}

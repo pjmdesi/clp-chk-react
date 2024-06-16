@@ -2,8 +2,8 @@
 @import '_colors';
 
 @font-face {
-    font-family: 'Recursive';
-    src: url(/src/assets/fonts/Recursive_VF_1.078.woff2) format('woff2');
+	font-family: 'Recursive';
+	src: url(/src/assets/fonts/Recursive_VF_1.078.woff2) format('woff2');
 }
 
 :root {
@@ -108,31 +108,74 @@ button {
 	// overflow: hidden;
 }
 
-
 #mediaContainer {
-    --controller-offset: 64px;
+	--controller-offset: 64px;
 
-    cursor: pointer;
+	cursor: pointer;
 
-    &.empty,
-    &:has(.auto) {
-        cursor: default;
-    }
-
-    flex: 1 0 auto;
+	flex: 1 0 auto;
 	position: relative;
 	display: block;
 	border-radius: 8px;
 	overflow: hidden;
+	z-index: 1;
 
-    height: calc( 100% - var(--controller-offset) );
+	height: calc(100% - var(--controller-offset));
 
 	background-color: var(--black);
 
-	box-shadow: 0 1px 6px rgba($color: var(--black-rgb), $alpha: 0.8);
+	box-shadow: 0 1px 6px 0px rgba($color: var(--black-rgb), $alpha: 0.8);
+
+	transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, border-radius 0.2s ease-in-out;
 
 	--static-dark: var(--gray5);
 	--static-light: var(--gray7);
+
+	&:before {
+		content: attr(data-overlay-info);
+		position: absolute;
+		display: flex;
+		width: 100%;
+		height: 100%;
+		align-items: center;
+		justify-content: center;
+
+		font-size: 3rem;
+		text-shadow: 1px 0px 2px var(--black), 0px 1px 2px var(--black), -1px 0px 2px var(--black), 0px -1px 2px var(--black);
+
+        font-weight: 700;
+
+		z-index: 4;
+        opacity: 1;
+
+        transition: opacity 0.15s ease-in-out;
+	}
+
+    &[data-overlay-info=""]:before {
+        opacity: 0;
+        transition: opacity 0.5s ease-in-out;
+    }
+
+	&.empty,
+	&:has(.auto) {
+		cursor: default;
+	}
+
+    &:has(#videoClipper.divider:not(.stuck)) {
+        cursor: col-resize;
+    }
+
+	&.zoom-out-anim {
+		transform: scale(1.005);
+        border-radius: 13px;
+		box-shadow: 0 0 4px 4px rgba($color: var(--pink-rgb), $alpha: 1);
+	}
+
+	&.zoom-in-anim {
+        transform: scale(0.994, 0.989);
+        border-radius: 0;
+		box-shadow: 0 0 4px 3px rgba($color: var(--pink-rgb), $alpha: 1);
+	}
 
 	.video-info {
 		position: absolute;
@@ -145,7 +188,7 @@ button {
 		color: var(--white);
 		font-size: 1rem;
 		font-weight: 500;
-        filter: drop-shadow(0 0 0.125rem var(--black));
+		filter: drop-shadow(0 0 0.125rem var(--black));
 
 		width: calc(50vw - 2rem);
 		height: auto;
@@ -160,7 +203,6 @@ button {
 		.video-label {
 			cursor: pointer;
 			transition: color 0.15s ease-in-out, filter 0.15s ease-in-out;
-
 
 			&:hover {
 				color: var(--pink);
@@ -201,14 +243,14 @@ button {
 	}
 
 	label.file-input {
-        --input-size: 150px;
-        --input-offset: 25%;
+		--input-size: 150px;
+		--input-offset: 25%;
 		position: absolute;
-		top: calc( 50% - var(--input-size) / 2 );
-		left: calc( var(--input-offset) - var(--input-size) / 2 );
+		top: calc(50% - var(--input-size) / 2);
+		left: calc(var(--input-offset) - var(--input-size) / 2);
 
 		&:nth-child(2) {
-            --input-offset: 75%;
+			--input-offset: 75%;
 		}
 
 		display: flex;
@@ -224,7 +266,7 @@ button {
 		z-index: 4;
 
 		width: var(--input-size);
-		height: var(--input-size);;
+		height: var(--input-size);
 
 		background: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
 		box-shadow: inset 0px 3px 8px rgba(255, 255, 255, 0.1), inset 0px -3px 8px rgba(0, 0, 0, 0.25);
@@ -234,7 +276,7 @@ button {
 
 		appearance: none;
 
-        transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
+		transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
 
 		> span {
 			grid-column: 1 / -1;
@@ -247,10 +289,9 @@ button {
 			display: none;
 		}
 
-        &:hover {
-            background: rgba($color: var(--darker-blue-rgb), $alpha: 1);
-
-        }
+		&:hover {
+			background: rgba($color: var(--darker-blue-rgb), $alpha: 1);
+		}
 	}
 
 	// generate tv static
@@ -272,38 +313,38 @@ button {
 
 		z-index: 0;
 
-        --icon-url: url("data:image/svg+xml, <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-unlock' viewBox='0 0 16 16'><path d='M11 1a2 2 0 0 0-2 2v4a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h5V3a3 3 0 0 1 6 0v4a.5.5 0 0 1-1 0V3a2 2 0 0 0-2-2M3 8a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1z'/></svg>");
-        --icon-color: var(--white);
+		--icon-url: url("data:image/svg+xml, <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-unlock' viewBox='0 0 16 16'><path d='M11 1a2 2 0 0 0-2 2v4a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h5V3a3 3 0 0 1 6 0v4a.5.5 0 0 1-1 0V3a2 2 0 0 0-2-2M3 8a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1z'/></svg>");
+		--icon-color: var(--white);
 
-        &:after {
-            content: '';
-            background: var(--icon-color);
-            mask-image: var(--icon-url);
-            mask-size: contain;
-            mask-repeat: no-repeat;
-            position: absolute;
+		&:after {
+			content: '';
+			background: var(--icon-color);
+			mask-image: var(--icon-url);
+			mask-size: contain;
+			mask-repeat: no-repeat;
+			position: absolute;
 
-            inset: 50% var(--spacing) auto auto;
-            width: 1.25rem;
-            height: 1.25rem;
+			inset: 50% var(--spacing) auto auto;
+			width: 1.25rem;
+			height: 1.25rem;
 
-            transform: translateY(-50%);
+			transform: translateY(-50%);
 
-            z-index: 4;
-        }
+			z-index: 4;
+		}
 
-        &.auto:after {
-            content: none;
-        }
+		&.auto:after {
+			content: none;
+		}
 
-        &.flipped:after {
-            inset: 50% auto auto var(--spacing);
-        }
+		&.flipped:after {
+			inset: 50% auto auto var(--spacing);
+		}
 
-        &.stuck {
-            --icon-url: url("data:image/svg+xml, <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' viewBox='0 0 16 16'><path d='M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2'/></svg>");
-            --icon-color: var(--pink);
-        }
+		&.stuck {
+			--icon-url: url("data:image/svg+xml, <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' viewBox='0 0 16 16'><path d='M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2'/></svg>");
+			--icon-color: var(--pink);
+		}
 
 		&.divider {
 			width: 100%;
@@ -311,18 +352,17 @@ button {
 			top: 0;
 			bottom: 0;
 			overflow: hidden;
-
 		}
 
 		&.boxCutout,
 		&.circleCutout {
-            // clip-path: circle(50% at 50% 50%);
+			// clip-path: circle(50% at 50% 50%);
 			overflow: hidden;
 			transform: translate(-50%, -50%);
 
 			box-shadow: 0 0 0 calc(var(--user-divider-thickness) + 0.75px) var(--user-divider-color);
 
-            transition: border-radius 0.25s ease-in-out, box-shadow .25s ease-in-out;
+			transition: border-radius 0.25s ease-in-out, box-shadow 0.25s ease-in-out;
 		}
 
 		&.circleCutout {
@@ -331,10 +371,11 @@ button {
 	}
 
 	video {
-		left: calc(50vw - 8px);
-		transform: translateX(-50%);
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
 		display: block;
-		height: 100%;
+		height: auto;
 		position: absolute;
 		background: var(--black);
 	}
@@ -377,7 +418,7 @@ button {
 	inset: auto var(--controller-spacing) var(--controller-spacing);
 	border-radius: 0 0 8px 8px;
 
-    background-color: var(--dark-blue);
+	background-color: var(--dark-blue);
 
 	display: grid;
 	grid: 1fr 1fr / 1fr auto 1fr;
@@ -436,8 +477,7 @@ button {
 		// position: absolute;
 
 		background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
-	    border-radius: var(--controller-spacing);
-
+		border-radius: var(--controller-spacing);
 
 		opacity: 0;
 
@@ -458,6 +498,7 @@ button {
 	}
 
 	&.docked {
+		z-index: 0;
 		animation: position-delay-abs-to-rel;
 		animation-duration: 0s;
 		animation-delay: 0.5s;
@@ -516,12 +557,12 @@ button {
 			}
 
 			.rc-slider-step {
-                position: absolute;
-                top: calc(var(--slider-spacing) * -1);
-                bottom: calc(var(--slider-spacing) * -1);
-                left: 0;
-                right: 0;
-                height: auto;
+				position: absolute;
+				top: calc(var(--slider-spacing) * -1);
+				bottom: calc(var(--slider-spacing) * -1);
+				left: 0;
+				right: 0;
+				height: auto;
 			}
 		}
 
