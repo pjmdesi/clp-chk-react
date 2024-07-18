@@ -9,9 +9,10 @@
 * Add ability to re-center the video elements if the user double-clicks the middle mouse button.
 * Add slider to control volume for each vid (maybe scroll on volume button fills in button outline?)
 * Add warning when videos are not the same ratio / length
-* Allow using horizontal scroll wheel to scrub video
+* (?) If videos are different lengths:
+  * Allow timeline track to indicate where the shorter one ends
+  * Allow user to pick whether black or last frame is shown
 * Allow swapping vertical scroll and horizontal scroll functions (vertical scroll = zoom | horizontal scroll = scrub <-> vertical scroll = scrub | horizontal scroll = zoom) [ use event listener: _**onwheel**_ and use x & y coordinates to distinguish between the 2 ]
-* Add video details overlay
 * Add notes overlay
 * Add ability to change size of tool when right-clicking and dragging
 * Modals
@@ -23,14 +24,10 @@
     * Zoom minimums and maximums
 * Update timecode to use HH:MM:SS:FF format, add second entry to indicate second vid timecode if different framerate
 * Add length time label to end of timeline scrubber
-* If videos are different lengths:
-  * Allow timeline track to indicate where the shorter one ends
-  * Allow user to pick whether black or last frame is shown
 * Fix controller css animation at app launch
-* Fix issue where clipped video doesn't position on the Y-axis correctly if the conrtoller bar is docked on startup
+* Fix issue where clipped video doesn't position on the Y-axis correctly if the controller bar is docked on startup
 * Display audio waveform to indicate which / how loud each video is playing. [source](https://css-tricks.com/making-an-audio-waveform-visualizer-with-vanilla-javascript/)
 * Fix issue where panning doesn't work when clipping tool is locked.
-* Round zoom percentage values to match percentage label values.
 * Create info page for controls and keyboard shortcuts (if there ever are any).
 * Fix issue where divider auto doesn't work if divider was locked before toggling auto on.
 
@@ -38,13 +35,14 @@
 
 * Fix file directory opening feature (clicking on the filename should open the containing folder of the file)
 * Fix issue where selected tool doesn't re-select after closing and opening a new file in one of the panes
-  * Repro: Select any tool except divider, close one of the files, open a new file in the same pane, observe that divider is set as tool, but previously selected tool is still indicated in the controller bar.
+  * Reproduce: Select any tool except divider, close one of the files, open a new file in the same pane, observe that divider is set as tool, but previously selected tool is still indicated in the controller bar.
 * Add ability to open images
 * Allow for rendering of comparison window to video file. _No idea how to do that..._ [Maybe this?](https://dev.to/yonatanbd/using-electron-to-create-videos-canvas-ffmpeg-5gdm)
 * Show error when video file fails to load (e.g. app loads after video is deleted, attempting to pull up the last video loaded). Currently shows black, error only present in console.
 * Allow loading of entire folder and ability to quickly pick video/images from opened folder (probably as a sidebar or maybe as a separate, smaller window).
   * Add A/B selector to select which panel gets replaced by the selected file in the loaded folder
   **[ A** | B ]
+  * Allow user to drag files into the panes to replace ones currently there
 * Add memory to recall on next app launch:
   * ~~Videos from last session~~ (5/14/24)
   * Tool & settings used from last session
@@ -55,6 +53,9 @@
 
 ### Complete
 
+* ~~Round zoom percentage values to match percentage label values.~~ (7/18/24)
+* ~~Allow using horizontal scroll wheel to scrub video~~ (7/18/24)
+* ~~Add video details overlay (added via same element as zoom overlay)~~ (7/18/24)
 * ~~Create a snap at "real size" zoom (1:1 pixel ratio) wherever that falls based on video pixel values.~~ (7/18/24)
 * ~~Add absolute size to zoom display (px as well as %)~~ (7/18/24)
 * ~~Fix issue where resizing the window causes the clipped video to become misaligned with the non-clipped video. Non-clipped video is correct~~ (7/18/24)
