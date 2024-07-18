@@ -1,7 +1,7 @@
 {
     "name": "clp-chk-react",
     "productName": "ClpChk",
-    "version": "1.0.0",
+    "version": "0",
     "description": "Compare versions of videos and photos side-by-side.",
     "main": ".webpack/main",
     "scripts": {
@@ -49,7 +49,8 @@
         "new-component": "^5.0.2",
         "rc-slider": "^10.5.0",
         "react": "^18.2.0",
-        "react-dom": "^18.2.0"
+        "react-dom": "^18.2.0",
+        "react-resize-detector": "^11.0.1"
     },
     "build": {
         "appId": "com.pjmullen.clp-chk-react",

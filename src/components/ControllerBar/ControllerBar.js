@@ -158,8 +158,9 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 				sliderMinMax={[0, playbackStatus.playbackEndTime]}
 				value={playbackStatus.playbackPosition}
 				stepValue={0.01}
-				onChange={PlayerControls.setCurrentTime}
+				// onChange={PlayerControls.setCurrentTime}
 				onBeforeChange={() => {
+                    console.log('slider grab');
 					PlayerControls.pause();
 				}}
 				useSignificantFigures
@@ -182,6 +183,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 						<>
 							<PlayerRadioButtons id="toolOptions" buttonSet={toolModeSet[toolSettings.toolMode].optionSet} value={toolSettings.toolOptions.type} />
 							<PlayerSlider
+                                defaultSliderValue={24}
 								id="transitionSpeedSlider"
 								name="Transition Speed"
 								sliderMinMax={[0.5, 120]}
@@ -195,6 +197,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 					)}
 					{['boxCutout', 'circleCutout'].includes(toolSettings.toolMode) && (
 						<PlayerSlider
+                            defaultSliderValue={200}
 							id="clipperSizeSlider"
 							name="Tool Size"
 							sliderMinMax={[100, 500]}
@@ -212,6 +215,8 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 					<PlayerControl id="skipBackButton" iconName="SkipBack" onClick={() => PlayerControls.setCurrentTime(0)} />
 					<PlayerControl id="stepBackButton" iconName="StepBack" onClick={() => PlayerControls.skip(-0.1)} />
 					<PlayerControl id="playPauseButton" iconName={playbackStatus.playbackState === 'playing' ? 'Pause' : 'Play'} onClick={() => PlayerControls.playPause()} />
+					{/* <PlayerControl id="playButton" iconName={'Play'} onClick={() => PlayerControls.play()} /> */}
+					{/* <PlayerControl id="pauseButton" iconName={'Pause'} onClick={() => PlayerControls.pause()} /> */}
 					<PlayerControl id="stepForwardButton" iconName="StepForward" onClick={() => PlayerControls.skip(0.1)} />
 					<PlayerControl id="skipForwardButton" iconName="SkipForward" onClick={() => PlayerControls.setCurrentTime(playbackStatus.playbackEndTime - 0.1)} />
 				</div>

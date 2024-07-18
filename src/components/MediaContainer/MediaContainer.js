@@ -4,24 +4,31 @@ import MediaFileInput from '../MediaFileInput';
 import Icon from '../Icon';
 import MainContainer from '../MainContainer/MainContainer';
 
-function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMedia, rightMedia, setLeftMedia, setRightMedia, PlayerControls }) {
+function InfoOverlay({ info }) {
+	return <div id="infoOverlayElem" dangerouslySetInnerHTML={{ __html: info }}></div>;
+}
+
+function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMedia, rightMedia, setLeftMedia, setRightMedia, PlayerControls, viewportSize }) {
 	const mediaContainerElem = React.useRef(),
 		leftMediaElem = React.useRef(),
 		rightMediaElem = React.useRef(),
 		videoClipper = React.useRef();
 
-	const [leftMediaLabel, setLeftMediaLabel] = React.useState('Left Media'),
-		[rightMediaLabel, setRightMediaLabel] = React.useState('Right Media'),
-		[clipperPosition, setClipperPosition] = React.useState({ x: 50, y: 50 }),
+	const [clipperPosition, setClipperPosition] = React.useState({ x: 50, y: 50 }),
 		[videoOffset, setVideoOffset] = React.useState({ x: 0, y: 0 }),
 		[clipperStyle, setClipperStyle] = React.useState({ width: '50%' }),
 		[clipperFlip, setClipperFlip] = React.useState(false),
 		[clippedMediaStyle, setClippedMediaStyle] = React.useState({ minWidth: '200%', zIndex: 3 }),
 		[unClippedMediaStyle, setUnClippedMediaStyle] = React.useState({ minWidth: '100%' }),
-		[mainContainerOverlayInfo, setMainContainerOverlayInfo] = React.useState(''),
+		[containerOverlayInfo, setContainerOverlayInfo] = React.useState(''),
+		[leftMediaMetaData, setLeftMediaMetaData] = React.useState(null),
+		[rightMediaMetaData, setRightMediaMetaData] = React.useState(null),
+        [zoomSnap, setZoomSnap] = React.useState(null),
 		continuousClipInterval = React.useRef(null);
 
+	// Plays and pauses the videos when the playback state changes
 	React.useEffect(() => {
+        console.log('playback change');
 		if (leftMedia && rightMedia) {
 			if (playbackStatus.playbackState === 'playing') {
 				leftMediaElem.current.play();
@@ -29,6 +36,7 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 			}
 
 			if (playbackStatus.playbackState === 'paused') {
+                console.log('pause the videos!');
 				leftMediaElem.current.pause();
 				rightMediaElem.current.pause();
 
@@ -38,8 +46,9 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 				}
 			}
 		}
-	}, [playbackStatus, leftMedia, rightMedia]);
+	}, [playbackStatus.playbackState, playbackStatus.playbackPosition]);
 
+	// Switches between auto and manual mode for the divider tool
 	React.useEffect(() => {
 		clearInterval(continuousClipInterval.current);
 		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) {
@@ -50,11 +59,9 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 		}
 	}, [toolSettings.toolMode, toolSettings.toolOptions]);
 
+	// Sets the tool made to divider when either the left or right media has no file
 	React.useEffect(() => {
 		const newToolSettings = { ...toolSettings };
-
-		let leftMediaDuration = 0,
-			rightMediaDuration = 0;
 
 		if (!leftMedia || !rightMedia) {
 			newToolSettings.toolOptions.auto = false;
@@ -64,29 +71,14 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 
 			resetMediaClipper();
 		}
-
-		if (leftMedia) {
-			setLeftMediaLabel(leftMedia.split(/[/\\]/).pop());
-			leftMediaElem.current.load();
-
-			leftMediaDuration = leftMediaElem.current.duration;
-		} else {
-			setLeftMediaLabel('');
-		}
-		if (rightMedia) {
-			setRightMediaLabel(rightMedia.split(/[/\\]/).pop());
-			rightMediaElem.current.load();
-
-			rightMediaDuration = rightMediaElem.current.duration;
-		} else {
-			setRightMediaLabel('');
-		}
 	}, [leftMedia, rightMedia]);
 
+	// Updates the playback speed of the videos
 	React.useEffect(() => {
 		updateMediaPlaybackSpeed();
 	}, [toolSettings.playerSpeed]);
 
+	// Updates the volume of the videos
 	React.useEffect(() => {
 		if (leftMedia && rightMedia) {
 			leftMediaElem.current.volume = toolSettings.playerAudio.left.volume;
@@ -94,13 +86,46 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 		}
 	}, [toolSettings.playerAudio]);
 
+	// Runs the clipMedia function when the zoom scale or viewport size changes
 	React.useEffect(() => {
 		clipMedia();
-	}, [toolSettings.zoomScale]);
+	}, [toolSettings.zoomScale, viewportSize]);
 
-    let offsetStart = videoOffset;
+    // Display the new zoom info in the overlay info element when the video elements are resized
+    React.useEffect(() => {
+        const pixelPerfect = zoomSnap === 'pixel';
+        displayOverlayInfo(
+            `<h3>Zoom: ${pixelPerfect?'~':''}${Math.round(toolSettings.zoomScale * 100)}%</h3><h6>${!pixelPerfect?'~':''}${rightMediaElem.current.offsetWidth}px <small>⨉</small> ${!pixelPerfect?'~':''}${rightMediaElem.current.offsetHeight}px ${pixelPerfect?'[1:1]':''}</h6>`
+        );
+    }, [unClippedMediaStyle.minWidth]);
+
+    React.useEffect(() => {
+        console.log(toolSettings.zoomScale, { zoomSnap });
+    }, [toolSettings.zoomScale, zoomSnap]);
+
+	let offsetStart = videoOffset;
 
 	const handleLoadedMetadata = video => {
+		let target = video.target;
+
+		if (target.id === 'left-video') {
+			setLeftMediaMetaData({
+				fileName: leftMedia.split(/[/\\]/).pop(),
+				duration: target.duration,
+				width: target.videoWidth,
+				height: target.videoHeight,
+			});
+		}
+
+		if (target.id === 'right-video') {
+			setRightMediaMetaData({
+				fileName: rightMedia.split(/[/\\]/).pop(),
+				duration: target.duration,
+				width: target.videoWidth,
+				height: target.videoHeight,
+			});
+		}
+
 		const currentPlaybackEndTime = playbackStatus.playbackEndTime;
 
 		const newPlaybackEndTime = Math.max(currentPlaybackEndTime, video.target.duration);
@@ -135,18 +160,21 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 
 	const displayOverlayInfoTimeout = React.useRef(null);
 
-	const displayOverlayInfo = info => {
+	// Show overlay info element
+	// After a timeout, hide the overlay info element again
+	// Optionally cancel the timeout to prevent clearing the overlay info
+	const displayOverlayInfo = (info, cancelTimeout = false) => {
 		clearTimeout(displayOverlayInfoTimeout.current);
 
-		setMainContainerOverlayInfo(info);
+		setContainerOverlayInfo(info);
 
-		displayOverlayInfoTimeout.current = setTimeout(() => {
-			setMainContainerOverlayInfo('');
-		}, 750);
+		!cancelTimeout &&
+			(displayOverlayInfoTimeout.current = setTimeout(() => {
+				setContainerOverlayInfo('');
+			}, 750));
 	};
 
 	const clipMedia = event => {
-		// console.log({ event });
 		// Don't clip if either side is empty
 		if (!(leftMedia && rightMedia)) return;
 
@@ -191,8 +219,8 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 					width: toolSettings.zoomScale * (100 / position) * 100 + '%',
 					minWidth: toolSettings.zoomScale * (100 / position) * 100 + '%',
 					zIndex: 3,
-                    top: (videoOffset.y * toolSettings.zoomScale)  + mediaContElem.offsetHeight / 2,
-					left: (videoOffset.x * toolSettings.zoomScale) + mediaContElem.offsetWidth / 2,
+					top: videoOffset.y * toolSettings.zoomScale + mediaContElem.offsetHeight / 2,
+					left: videoOffset.x * toolSettings.zoomScale + mediaContElem.offsetWidth / 2,
 				});
 				setUnClippedMediaStyle({
 					minWidth: `${100 * toolSettings.zoomScale}%`,
@@ -230,8 +258,8 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 					width: videoScale.x + '%',
 					minHeight: videoScale.y + '%',
 					height: videoScale.y + '%',
-					left: (videoOffset.x * toolSettings.zoomScale) + circleSettings.radius - (clipperPos.x / 100) * mediaContElem.offsetWidth + mediaContElem.offsetWidth / 2,
-					top: (videoOffset.y * toolSettings.zoomScale) + circleSettings.radius - (clipperPos.y / 100) * mediaContElem.offsetHeight + mediaContElem.offsetHeight / 2,
+					left: videoOffset.x * toolSettings.zoomScale + circleSettings.radius - (clipperPos.x / 100) * mediaContElem.offsetWidth + mediaContElem.offsetWidth / 2,
+					top: videoOffset.y * toolSettings.zoomScale + circleSettings.radius - (clipperPos.y / 100) * mediaContElem.offsetHeight + mediaContElem.offsetHeight / 2,
 				};
 
 				setClippedMediaStyle(clippedMediaStyle);
@@ -288,7 +316,8 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 	};
 
 	const handleScroll = e => {
-		// console.log(e);
+
+        if (!rightMedia || !leftMedia) return;
 
 		// swap scroll directions if tool setting is enabled
 		if (toolSettings.swapScrollDirections) {
@@ -301,84 +330,116 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 
 			// Calculate the new zoom scale based on the scroll value
 			// To make it 'feel' like it's zooming in and out at an even rate, multiply the scroll value delta by the current zoom scale. i.e. the more zoomed in, the faster it zooms in and out
-			let newZoom = newToolSettings.zoomScale + (e.deltaY * newToolSettings.zoomScale) / 5000;
+			let newZoom = newToolSettings.zoomScale + (e.deltaY * newToolSettings.zoomScale) / 2500;
 
-			newZoom = Number(Number(newZoom).toFixed(3));
+			newZoom = Number(Number(newZoom).toFixed(2));
 
-			let animating = false;
+			let animatingFrame = false;
 
-			// Show anim & cancel if the zoom is out of bounds
+			// Show frame anim & cancel if the zoom is out of bounds
 			if (newZoom > 6) {
 				newZoom = 6;
-				if (!animating) {
+				if (!animatingFrame) {
 					mediaContainerElem.current.classList.add('zoom-out-anim');
-					animating = true;
+					animatingFrame = true;
 					setTimeout(() => {
 						mediaContainerElem.current.classList.remove('zoom-out-anim');
-						animating = false;
+						animatingFrame = false;
 					}, 500);
 				}
 			}
 			if (newZoom < 0.5) {
 				newZoom = 0.5;
-				if (!animating) {
+				if (!animatingFrame) {
 					mediaContainerElem.current.classList.add('zoom-in-anim');
-					animating = true;
+					animatingFrame = true;
 					setTimeout(() => {
 						mediaContainerElem.current.classList.remove('zoom-in-anim');
-						animating = false;
+						animatingFrame = false;
 					}, 500);
 				}
 			}
 
+            if (!zoomSnap) {
+                // Snap to video width if zoom is close to video width
+                const videoWidth = rightMediaMetaData.width;
+                const videoElemWidth = rightMediaElem.current.offsetWidth;
+                const containerWidth = mediaContainerElem.current.offsetWidth;
+
+                const pixelRatio = videoElemWidth / videoWidth;
+
+                console.log({ videoWidth, videoElemWidth, pixelRatio, percent: videoWidth / containerWidth});
+
+                if (pixelRatio < 1.02 && pixelRatio > 0.985) {
+                    newZoom = videoWidth / containerWidth;
+                    setZoomSnap('pixel');
+                };
+
+                // Snap to 1 if zoom is close to 1
+                if (newZoom < 1.04 && newZoom > 0.96) {
+                    newZoom = 1;
+                    setZoomSnap('1');
+                }
+
+                // Snap to 2 if zoom is close to 2
+                if (newZoom < 2.04 && newZoom > 1.96) {
+                    newZoom = 2;
+                    setZoomSnap('2');
+                }
+
+            } else {
+                setZoomSnap(null);
+            }
+
 			newToolSettings.zoomScale = newZoom;
 
-			displayOverlayInfo(`Zoom: ${Math.round(newZoom * 100)}%`);
-
 			setToolSettings(newToolSettings);
-		}
+		} else if (e.deltaX !== 0 && e.deltaY === 0) {
+            // seek frames if secondary scroll
+            seekFrames(e.deltaX < 0 ? .5 : -.5);
+        }
 
 		clipMedia(e);
 	};
 
-	const handleDrag = (event) => {
+	const handleDrag = event => {
 		event.preventDefault();
 
-        const offsetDelta = {
-            x: (offsetStart.x - event.clientX) / toolSettings.zoomScale,
-            y: (offsetStart.y - event.clientY) / toolSettings.zoomScale,
-        }
+		const offsetDelta = {
+			x: (offsetStart.x - event.clientX) / toolSettings.zoomScale,
+			y: (offsetStart.y - event.clientY) / toolSettings.zoomScale,
+		};
 
-        console.log({ offsetDelta });
+		console.log({ offsetDelta });
 
-        const newOffset = {
-            x: videoOffset.x - offsetDelta.x,
-            y: videoOffset.y - offsetDelta.y,
-        };
+		const newOffset = {
+			x: videoOffset.x - offsetDelta.x,
+			y: videoOffset.y - offsetDelta.y,
+		};
 
-        if (newOffset.x > mediaContainerElem.current.offsetWidth / 2) {
-            newOffset.x = mediaContainerElem.current.offsetWidth / 2;
-        }
+		if (newOffset.x > mediaContainerElem.current.offsetWidth / 2) {
+			newOffset.x = mediaContainerElem.current.offsetWidth / 2;
+		}
 
-        if (newOffset.x < -mediaContainerElem.current.offsetWidth / 2) {
-            newOffset.x = -mediaContainerElem.current.offsetWidth / 2;
-        }
+		if (newOffset.x < -mediaContainerElem.current.offsetWidth / 2) {
+			newOffset.x = -mediaContainerElem.current.offsetWidth / 2;
+		}
 
-        if (newOffset.y > mediaContainerElem.current.offsetHeight / 2) {
-            newOffset.y = mediaContainerElem.current.offsetHeight / 2;
-        }
+		if (newOffset.y > mediaContainerElem.current.offsetHeight / 2) {
+			newOffset.y = mediaContainerElem.current.offsetHeight / 2;
+		}
 
-        if (newOffset.y < -mediaContainerElem.current.offsetHeight / 2) {
-            newOffset.y = -mediaContainerElem.current.offsetHeight / 2;
-        }
+		if (newOffset.y < -mediaContainerElem.current.offsetHeight / 2) {
+			newOffset.y = -mediaContainerElem.current.offsetHeight / 2;
+		}
 
-        setVideoOffset(newOffset);
+		setVideoOffset(newOffset);
 	};
 
-    const handleMouseUp = () => {
-        mediaContainerElem.current.removeEventListener('mousemove', handleDrag);
-        mediaContainerElem.current.removeEventListener('mouseup', handleMouseUp);
-    };
+	const handleMouseUp = () => {
+		mediaContainerElem.current.removeEventListener('mousemove', handleDrag);
+		mediaContainerElem.current.removeEventListener('mouseup', handleMouseUp);
+	};
 
 	const handleMouseDown = event => {
 		if (!leftMedia || !rightMedia) return;
@@ -386,10 +447,10 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 		if (event.button === 1) {
 			event.preventDefault();
 
-            offsetStart = {
-                x: event.clientX,
-                y: event.clientY,
-            };
+			offsetStart = {
+				x: event.clientX,
+				y: event.clientY,
+			};
 
 			mediaContainerElem.current.addEventListener('mousemove', handleDrag, false);
 			// mediaContainerElem.current.addEventListener('mousemove', handleDrag(event, offsetStart));
@@ -438,8 +499,7 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 
 	// see: http://www.inconduit.com/smpte/
 	const seekFrames = frameCount => {
-		!leftMediaElem.current.paused && PlayerControls.playPause();
-		!rightMediaElem.current.paused && PlayerControls.playPause();
+		playbackStatus.playbackState !== 'paused' && PlayerControls.pause();
 		setNewPosition(frameCount);
 	};
 
@@ -466,15 +526,15 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 			className={rightMedia ? '' : 'empty'}
 			onClick={handleClick}
 			onMouseDown={handleMouseDown}
-			onWheel={handleScroll}
-			data-overlay-info={mainContainerOverlayInfo}>
+			onWheel={handleScroll}>
+			<InfoOverlay info={containerOverlayInfo} />
 			{leftMedia ? (
 				<div className="video-info left-video-info">
 					<button className="video-closer" type="button" onClick={() => setLeftMedia('')}>
 						<Icon name="X" />
 					</button>
 					<p className="video-label" onClick={() => openMediaFile(leftMedia)}>
-						{leftMediaLabel}
+						{leftMediaMetaData ? leftMediaMetaData.fileName : 'Left Media'}
 					</p>
 					<button
 						className="video-audio-mute"
@@ -486,7 +546,13 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 						}}>
 						<Icon name={toolSettings.playerAudio.left.muted ? 'VolumeX' : 'Volume2'} color={toolSettings.playerAudio.left.muted ? 'yellow' : 'white'} />
 					</button>
-					<button className="video-meta-data" type="button">
+					<button
+                        className="video-meta-data"
+                        type="button"
+                        onClick={() => {
+                            const content = `<h3>Left Media Info</h3><h6><small>Source: ${leftMedia}</small></h6><p>Duration: ${leftMediaMetaData.duration.toFixed(2)}s</p><p>Width: ${leftMediaMetaData.width}px</p><p>Height: ${leftMediaMetaData.height}px</p>`;
+                            setContainerOverlayInfo(content, true)}
+                        }>
 						<Icon name="Info" />
 					</button>
 				</div>
@@ -496,9 +562,15 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 			{rightMedia ? (
 				<>
 					<div className="video-info right-video-info">
-						<button className="video-meta-data" type="button">
-							<Icon name="Info" />
-						</button>
+                    <button
+                        className="video-meta-data"
+                        type="button"
+                        onClick={() => {
+                            const content = `<h3>Right Media Info</h3><h6><small>Source: ${rightMedia}</small></h6><p>Duration: ${rightMediaMetaData.duration.toFixed(2)}s</p><p>Width: ${rightMediaMetaData.width}px</p><p>Height: ${rightMediaMetaData.height}px</p>`;
+                            setContainerOverlayInfo(content, true)}
+                        }>
+						<Icon name="Info" />
+					</button>
 						<button
 							className="video-audio-mute"
 							type="button"
@@ -511,7 +583,7 @@ function MediaContainer({ toolSettings, setToolSettings, playbackStatus, leftMed
 							<Icon name={toolSettings.playerAudio.right.muted ? 'VolumeX' : 'Volume2'} color={toolSettings.playerAudio.right.muted ? 'yellow' : 'white'} />
 						</button>
 						<p className="video-label" onClick={() => openMediaFile(rightMedia)}>
-							{rightMediaLabel}
+							{rightMediaMetaData ? rightMediaMetaData.fileName : 'Right Media'}
 						</p>
 						<button className="video-closer" type="button" onClick={() => setRightMedia('')}>
 							<Icon name="X" />

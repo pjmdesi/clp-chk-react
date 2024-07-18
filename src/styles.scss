@@ -131,10 +131,10 @@ button {
 	--static-dark: var(--gray5);
 	--static-light: var(--gray7);
 
-	&:before {
-		content: attr(data-overlay-info);
+	#infoOverlayElem {
 		position: absolute;
 		display: flex;
+        flex-direction: column;
 		width: 100%;
 		height: 100%;
 		align-items: center;
@@ -142,6 +142,8 @@ button {
 
 		font-size: 3rem;
 		text-shadow: 1px 0px 2px var(--black), 0px 1px 2px var(--black), -1px 0px 2px var(--black), 0px -1px 2px var(--black);
+        white-space: pre;
+        text-align: center;
 
         font-weight: 700;
 
@@ -149,12 +151,13 @@ button {
         opacity: 1;
 
         transition: opacity 0.15s ease-in-out;
+
+        &:not(:has(*)) {
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
 	}
 
-    &[data-overlay-info=""]:before {
-        opacity: 0;
-        transition: opacity 0.5s ease-in-out;
-    }
 
 	&.empty,
 	&:has(.auto) {
@@ -244,13 +247,13 @@ button {
 
 	label.file-input {
 		--input-size: 150px;
-		--input-offset: 25%;
+		--input-offset: 75%;
 		position: absolute;
 		top: calc(50% - var(--input-size) / 2);
 		left: calc(var(--input-offset) - var(--input-size) / 2);
 
 		&:nth-child(2) {
-			--input-offset: 75%;
+			--input-offset: 25%;
 		}
 
 		display: flex;
@@ -307,6 +310,7 @@ button {
 
 	#videoClipper {
 		position: relative;
+        background-color: var(--black);
 		box-shadow: 2px 0 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
 
 		will-change: contents;

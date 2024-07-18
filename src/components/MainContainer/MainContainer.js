@@ -3,6 +3,8 @@ import React from 'react';
 import MediaContainer from '../MediaContainer';
 import ControllerBar from '../ControllerBar';
 
+import { useResizeDetector } from 'react-resize-detector';
+
 // Set the defaults for starting the app
 let defaultToolSettings = {
 	// Which tool to use
@@ -13,8 +15,8 @@ let defaultToolSettings = {
 		auto: false,
 		// (Divider only) The animation pattern for the divider
 		type: 'backAndForth',
-        // Fix the position of the clipper
-        stick: false,
+		// Fix the position of the clipper
+		stick: false,
 		// Settings values for the tools, each tool has its own settings
 		value: {
 			divider: 30,
@@ -26,30 +28,30 @@ let defaultToolSettings = {
 		floating: false,
 		position: 'bottom',
 	},
-    zoomScale: 1,
-    swapScrollDirections: false,
+	zoomScale: 1,
+	swapScrollDirections: false,
 	// Playback speed for the video
 	playerSpeed: 1,
 	// Whether to loop the video
 	playerLoop: true,
 	// The amount of time to skip when the user clicks the skip button in ms
 	playerSkipTime: 100,
-    playerAudio: {
-        left: {
-            volume: .8,
-            muted: true,
-        },
-        right: {
-            volume: .8,
-            muted: true,
-        },
-    },
+	playerAudio: {
+		left: {
+			volume: 0.8,
+			muted: true,
+		},
+		right: {
+			volume: 0.8,
+			muted: true,
+		},
+	},
 };
 
 let defaultAppSettings = {
-    // Whether to show the tutorial
-    showTutorial: true,
-    swapScrollDirections: false,
+	// Whether to show the tutorial
+	showTutorial: true,
+	swapScrollDirections: false,
 };
 
 function MainContainer() {
@@ -58,30 +60,42 @@ function MainContainer() {
 		playbackState: 'paused',
 		// The current position in the videos, used for syncing the videos
 		playbackPosition: 0,
-        playbackEndTime: 0,
+		playbackEndTime: 0,
 	};
 
-    const leftMediaFromMemory = localStorage.getItem('leftMedia') || '';
-    const rightMediaFromMemory = localStorage.getItem('rightMedia') || '';
+	const leftMediaFromMemory = localStorage.getItem('leftMedia') || '';
+	const rightMediaFromMemory = localStorage.getItem('rightMedia') || '';
 
-    const toolMemory = localStorage.getItem('toolSettings') || '';
+	const toolMemory = localStorage.getItem('toolSettings') || '';
 
-    let appSettingsMemory = localStorage.getItem('appSettings') || '';
+	let appSettingsMemory = localStorage.getItem('appSettings') || '';
 
-    if (toolMemory) {
-        defaultToolSettings = JSON.parse(toolMemory);
-    } else {
-        localStorage.setItem('toolSettings', JSON.stringify(defaultToolSettings));
-    };
+	if (toolMemory) {
+		defaultToolSettings = JSON.parse(toolMemory);
+	} else {
+		localStorage.setItem('toolSettings', JSON.stringify(defaultToolSettings));
+	}
+
+    const mainContainerElem = React.useRef(null);
 
 	const [toolSettings, setToolSettings] = React.useState(defaultToolSettings),
 		[playbackStatus, setPlaybackStatus] = React.useState(defaultPlaybackStatus),
 		[leftMedia, setLeftMedia] = React.useState(leftMediaFromMemory),
 		[rightMedia, setRightMedia] = React.useState(rightMediaFromMemory),
-        [appSettings, setAppSettings] = React.useState(appSettingsMemory);
+		[viewportSize, setViewportSize] = React.useState({ width: window.innerWidth, height: window.innerHeight }),
+		[appSettings, setAppSettings] = React.useState(appSettingsMemory);
 
-        // console.log({playbackStatus});
-        // console.log({toolSettings});
+    const updateViewportSize = (...props) => {
+        setViewportSize({ width: props[0].width, height: props[0].height });
+    };
+
+    const { width, height, ref } = useResizeDetector({
+        targetRef: mainContainerElem,
+        onResize: updateViewportSize,
+    });
+
+	// console.log({playbackStatus});
+	// console.log({toolSettings});
 
 	const PlayerControls = {
 		playPause: () => {
@@ -92,65 +106,70 @@ function MainContainer() {
 				setPlaybackStatus(newPlaybackStatus);
 			}
 		},
-        play: () => {
-            if (leftMedia && rightMedia) {
-                const newPlaybackStatus = { ...playbackStatus };
-                newPlaybackStatus.playbackState = 'playing';
-
-                setPlaybackStatus(newPlaybackStatus);
-            }
-        },
-        pause: () => {
-            if (leftMedia && rightMedia) {
-                const newPlaybackStatus = { ...playbackStatus };
-                newPlaybackStatus.playbackState = 'paused';
-
-                setPlaybackStatus(newPlaybackStatus);
-            }
-        },
-		skip: time => {
+		play: () => {
 			if (leftMedia && rightMedia) {
 				const newPlaybackStatus = { ...playbackStatus };
-				newPlaybackStatus.playbackPosition += time;
+				newPlaybackStatus.playbackState = 'playing';
 
 				setPlaybackStatus(newPlaybackStatus);
 			}
 		},
-        setCurrentTime: time => {
-            if (leftMedia && rightMedia) {
-                const newPlaybackStatus = { ...playbackStatus };
-                newPlaybackStatus.playbackPosition = time;
+		pause: () => {
+            console.log('pause');
+			if (leftMedia && rightMedia) {
+				const newPlaybackStatus = { ...playbackStatus };
+				newPlaybackStatus.playbackState = 'paused';
 
+				setPlaybackStatus(newPlaybackStatus);
+			}
+		},
+		skip: time => {
+			if (leftMedia && rightMedia) {
+
+				const newPlaybackStatus = { ...playbackStatus };
+
+                newPlaybackStatus.playbackState = 'paused'
+                newPlaybackStatus.playbackPosition += time;
                 setPlaybackStatus(newPlaybackStatus);
             }
-        },
-        setEndTime: time => {
+		},
+		setCurrentTime: time => {
             if (leftMedia && rightMedia) {
                 const newPlaybackStatus = { ...playbackStatus };
-                newPlaybackStatus.playbackEndTime = time;
 
-                setPlaybackStatus(newPlaybackStatus);
-            }
-        },
+                newPlaybackStatus.playbackState = 'paused'
+				newPlaybackStatus.playbackPosition = time;
+
+				setPlaybackStatus(newPlaybackStatus);
+			}
+		},
+		setEndTime: time => {
+			if (leftMedia && rightMedia) {
+				const newPlaybackStatus = { ...playbackStatus };
+				newPlaybackStatus.playbackEndTime = time;
+
+				setPlaybackStatus(newPlaybackStatus);
+			}
+		},
 	};
 
-    React.useEffect(() => {
-        localStorage.setItem('leftMedia', leftMedia);
-    }, [leftMedia]);
+	React.useEffect(() => {
+		localStorage.setItem('leftMedia', leftMedia);
+	}, [leftMedia]);
 
-    React.useEffect(() => {
-        localStorage.setItem('rightMedia', rightMedia);
-    }, [rightMedia]);
+	React.useEffect(() => {
+		localStorage.setItem('rightMedia', rightMedia);
+	}, [rightMedia]);
 
-    React.useEffect(() => {
-        localStorage.setItem('toolSettings', JSON.stringify(toolSettings));
-    }, [toolSettings]);
+	React.useEffect(() => {
+		localStorage.setItem('toolSettings', JSON.stringify(toolSettings));
+	}, [toolSettings]);
 
 	return (
-		<div id="mainContainer">
+		<div id="mainContainer" ref={mainContainerElem}>
 			<MediaContainer
 				toolSettings={toolSettings}
-                appSettings={appSettings}
+				appSettings={appSettings}
 				setToolSettings={setToolSettings}
 				playbackStatus={playbackStatus}
 				leftMedia={leftMedia}
@@ -158,10 +177,11 @@ function MainContainer() {
 				setLeftMedia={setLeftMedia}
 				setRightMedia={setRightMedia}
 				PlayerControls={PlayerControls}
+				viewportSize={viewportSize}
 			/>
 			<ControllerBar
 				toolSettings={toolSettings}
-                appSettings={appSettings}
+				appSettings={appSettings}
 				leftMedia={leftMedia}
 				rightMedia={rightMedia}
 				setLeftMedia={setLeftMedia}
@@ -169,7 +189,9 @@ function MainContainer() {
 				setToolSettings={setToolSettings}
 				playbackStatus={playbackStatus}
 				PlayerControls={PlayerControls}
+				viewportSize={viewportSize}
 			/>
+            {/* <div ref={ref}>{`${width}x${height}`}</div> */}
 		</div>
 	);
 }
