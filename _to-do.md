@@ -5,7 +5,7 @@
 ## UI
 
 * Fix issue where progress bar slider does not pause video when attempting to scrub while video is playing
-  * *Issue is due to looped controls — i.e. slider position gets set by playbackStatus.playbackPosition which is set by video position as it updates (as video plays), slider cannot then set playbackStatus.playbackPosition because it will immediately be overridden by video if video is playing. __Need to force pause video, update video element playback position, which will then update playbackStatus.playbackPosition value.__*
+  * _Issue is due to looped controls — i.e. slider position gets set by playbackStatus.playbackPosition which is set by video position as it updates (as video plays), slider cannot then set playbackStatus.playbackPosition because it will immediately be overridden by video if video is playing. __Need to force pause video, update video element playback position, which will then update playbackStatus.playbackPosition value.___
 * Add ability to re-center the video elements if the user double-clicks the middle mouse button.
 * Add slider to control volume for each vid (maybe scroll on volume button fills in button outline?)
 * Add warning when videos are not the same ratio / length
@@ -60,7 +60,7 @@
 * ~~Create a snap at "real size" zoom (1:1 pixel ratio) wherever that falls based on video pixel values.~~ (7/18/24)
 * ~~Add absolute size to zoom display (px as well as %)~~ (7/18/24)
 * ~~Fix issue where resizing the window causes the clipped video to become misaligned with the non-clipped video. Non-clipped video is correct~~ (7/18/24)
-  * *[Fixed by adding resize listener, and re-running clipMedia() on resize](https://www.npmjs.com/package/react-resize-detector)*
+  * _[Fixed by adding resize listener, and re-running clipMedia() on resize](https://www.npmjs.com/package/react-resize-detector)_
 * ~~Allow picking audio track that plays~~ (5/14/24)
 * ~~Add ability to stick position of clipper~~ (5/14/24)
 * ~~Fix loop button~~ (5/14/24)
