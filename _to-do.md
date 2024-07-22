@@ -30,6 +30,7 @@
 * Fix issue where panning doesn't work when clipping tool is locked.
 * Create info page for controls and keyboard shortcuts (if there ever are any).
 * Fix issue where divider auto doesn't work if divider was locked before toggling auto on.
+* Change remaining input to list different detected versions of the loaded file after one is added to a pane. It should still work as regular file picker input as well.
 
 ## App
 
