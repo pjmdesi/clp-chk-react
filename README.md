@@ -11,3 +11,5 @@ This is a relatively simple web app based on React & Electron. I will be adding 
 Available as a deployable web app, ClpChk offers the following features:
 - **Side-by-side comparison**: View two media files simultaneously.
 - **Zooming and panning**: Easily navigate your loaded media files for detailed analysis.
+- **Clipping shapes and auto scanning**: Use different clipping shapes to focus on specific areas of the media, with automatic scanning.
+- **Playback controls**: Play, pause, and change playback speed.
