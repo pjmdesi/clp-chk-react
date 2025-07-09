@@ -1,7 +1,7 @@
 # ClpChk — A simple media comparison tool
 Ever wanted to compare two videos or images side by side? ClpChk is a simple tool that allows you to do that quickly. It has a user-friendly interface and supports zooming and panning, making it easy to analyze differences in video quality.
 
-![Screenshot](./public/screenshot.png)
+![App Screenshot](https://github.com/pjmdesi/clp-chk-react/blob/feb5b3c913729fd21f7c112a6e27c2965d03e3af/src/assets/images/app-screenshot.png)
 
 ## Features
 Available as a deployable web app, ClpChk offers the following features:
