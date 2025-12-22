@@ -26,6 +26,29 @@ rules.push(
 
 module.exports = {
 	// Put your normal webpack config below here
+	target: 'electron-renderer',
+	mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
+	devtool: process.env.NODE_ENV === 'production' ? false : 'source-map',
+	node: {
+		__dirname: false,
+		__filename: false,
+	},
+	resolve: {
+		extensions: ['.js', '.jsx', '.json'],
+		fallback: {
+			events: false,
+			fs: false,
+			path: false,
+			url: false,
+			util: false,
+			querystring: false,
+		},
+	},
+	optimization: {
+		minimize: process.env.NODE_ENV === 'production',
+		splitChunks: process.env.NODE_ENV === 'production' ? undefined : false,
+		concatenateModules: process.env.NODE_ENV === 'production',
+	},
 	module: {
 		rules,
 	},

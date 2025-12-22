@@ -1,11 +1,12 @@
 {
     "name": "clp-chk-react",
     "productName": "ClpChk",
-    "version": "0",
+    "version": "0.0.1",
     "description": "Compare versions of videos and photos side-by-side.",
     "main": ".webpack/main",
     "scripts": {
         "start": "electron-forge start",
+        "dev:web": "webpack serve --config webpack.dev.config.js",
         "package": "electron-forge package",
         "make": "electron-forge make",
         "publish": "electron-forge publish",
@@ -34,7 +35,9 @@
         "sass": "^1.75.0",
         "sass-loader": "^14.2.0",
         "style-loader": "^3.3.4",
-        "webpack": "^5.91.0"
+        "video.js": "^8.23.4",
+        "webpack": "^5.91.0",
+        "webpack-cli": "^6.0.1"
     },
     "keywords": [],
     "author": {
@@ -45,6 +48,7 @@
     "dependencies": {
         "custom-electron-titlebar": "^4.2.8",
         "electron-squirrel-startup": "^1.0.0",
+        "electron-store": "^11.0.2",
         "lucide-react": "^0.367.0",
         "new-component": "^5.0.2",
         "rc-slider": "^10.5.0",

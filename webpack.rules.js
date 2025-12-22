@@ -13,14 +13,19 @@ module.exports = [
 			},
 		},
 	},
-	{
-		test: /[/\\]node_modules[/\\].+\.(m?js|node)$/,
-		parser: { amd: false },
-		use: {
-			loader: '@vercel/webpack-asset-relocator-loader',
-			options: {
-				outputAssetBase: 'native_modules',
-			},
-		},
-	},
+	// Asset relocator loader commented out due to __dirname issues
+	// You may need this if you have native node modules
+	// {
+	// 	test: /[/\\]node_modules[/\\].+\.(m?js|node)$/,
+	// 	exclude: /webpack-asset-relocator-loader/,
+	// 	parser: { amd: false },
+	// 	use: {
+	// 		loader: '@vercel/webpack-asset-relocator-loader',
+	// 		options: {
+	// 			outputAssetBase: 'native_modules',
+	// 			wrapperCompatibility: true,
+	// 			escapeNonAnalyzableRequires: false,
+	// 		},
+	// 	},
+	// },
 ];

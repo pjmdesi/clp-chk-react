@@ -6,8 +6,12 @@ import PlayerRadioButtons from '../PlayerRadioButtons';
 import ModalButton from '../ModalButton';
 import PlayerToggle from '../PlayerToggle/PlayerToggle';
 import Icon from '../Icon';
+import { secondsToTimecode } from '../../utils/timecode';
 
-function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedia, rightMedia, setLeftMedia, setRightMedia, PlayerControls }) {
+function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedia, rightMedia, setLeftMedia, setRightMedia, PlayerControls, leftMediaMetaData, rightMediaMetaData, valueFormatter = null }) {
+
+    const [hasAnyVideo, setHasAnyVideo] = React.useState(false);
+
 	const updateToolSettings = (newSettingVal, setting) => {
 		const newSettings = { ...toolSettings };
 		newSettings[setting] = newSettingVal;
@@ -47,6 +51,15 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 		setLeftMedia(newLeftMedia);
 		setRightMedia(newRightMedia);
 	};
+
+    const sizeWindowToFitVideo = () => {
+        if (typeof window !== 'undefined' && window.api && window.api.triggerSizeToFit) {
+            window.api.triggerSizeToFit();
+        }
+    };
+
+    // Check if running in Electron
+    const isInElectron = typeof window !== 'undefined' && window.api && window.api.triggerSizeToFit;
 
 	const toolModeSet = {
 		divider: {
@@ -101,12 +114,6 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 			title: 'One-quarter Speed',
 			action: () => updateToolSettings(0.25, 'playerSpeed'),
 		},
-		// oneThird: {
-		// 	name: 'oneThird',
-		// 	label: '⅓',
-		// 	value: 0.33,
-		// 	action: () => updateToolSettings(0.33, 'playerSpeed'),
-		// },
 		oneHalf: {
 			name: 'oneHalf',
 			label: '½',
@@ -128,12 +135,6 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 			title: 'Twice Speed',
 			action: () => updateToolSettings(2, 'playerSpeed'),
 		},
-		// threeTimes: {
-		// 	name: 'threeTimes',
-		// 	label: 'x3',
-		// 	value: 3,
-		// 	action: () => updateToolSettings(3, 'playerSpeed'),
-		// },
 		fourTimes: {
 			name: 'fourTimes',
 			label: 'x4',
@@ -150,26 +151,59 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 		},
 	};
 
+	const wasPlayingBeforeScrub = React.useRef(false);
+
+	// Use the maximum framerate from both videos for smooth playback control
+	const leftFramerate = leftMediaMetaData?.framerate || 0;
+	const rightFramerate = rightMediaMetaData?.framerate || 0;
+	const framerate = Math.max(leftFramerate, rightFramerate) || 30; // Default to 30 if both are 0
+
+	// Determine if we have videos or only images
+	const leftMediaType = leftMediaMetaData?.mediaType || null;
+	const rightMediaType = rightMediaMetaData?.mediaType || null;
+	const bothAreImages = leftMediaType === 'image' && rightMediaType === 'image';
+
+    React.useEffect(() => {
+        setHasAnyVideo(leftMediaType === 'video' || rightMediaType === 'video');
+    }, [leftMediaMetaData, rightMediaMetaData]);
+
 	return (
-		<div id="controllerBar" className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${!leftMedia || !rightMedia ? ' disabled' : ''}`}>
-			<PlayerSlider
-				id="videoProgressSlider"
-				name="Tool Size"
-				sliderMinMax={[0, playbackStatus.playbackEndTime]}
-				value={playbackStatus.playbackPosition}
-				stepValue={0.01}
-				// onChange={PlayerControls.setCurrentTime}
-				onBeforeChange={() => {
-                    console.log('slider grab');
-					PlayerControls.pause();
-				}}
-				useSignificantFigures
-			/>
+		<div id="controllerBar" className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${!leftMedia || !rightMedia ? ' disabled' : ''}${hasAnyVideo ? ' videos' : ''}`}>
+			{hasAnyVideo && (
+				<PlayerSlider
+					id="videoProgressSlider"
+					name="Playback Position"
+					sliderMinMax={[0, playbackStatus.playbackEndTime]}
+					value={playbackStatus.playbackPosition}
+					stepValue={0.01}
+					onChange={(time) => {
+						PlayerControls.setCurrentTime(time);
+					}}
+					onChangeStart={() => {
+						wasPlayingBeforeScrub.current = playbackStatus.playbackState === 'playing';
+						PlayerControls.pause();
+						PlayerControls.setIsScrubbing(true);
+					}}
+					onChangeComplete={(time) => {
+						// First turn off scrubbing, then resume if needed
+						setTimeout(() => {
+							PlayerControls.setIsScrubbing(false);
+							if (wasPlayingBeforeScrub.current) {
+								setTimeout(() => {
+									PlayerControls.play();
+								}, 0);
+							}
+						}, 0);
+					}}
+					valueFormatter={(seconds) => secondsToTimecode(seconds, framerate)}
+				/>
+			)}
 			<div className="control-group">
 				<PlayerControl id="swapMediasButton" iconName="GitCompareArrows" title="Swap videos" onClick={() => swapMedias()} />
 				<PlayerRadioButtons id="toolModeButtonSet" buttonSet={toolModeSet} value={toolSettings.toolMode} />
 				<div className="control-subgroup">
-					{toolSettings.toolMode === 'divider' && (
+					{/* !BROKEN - adjustments for auto sweeper
+                        {toolSettings.toolMode === 'divider' && (
 						<PlayerToggle
 							id="autoDividerButton"
 							name="Move Divider Automatically"
@@ -194,7 +228,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 								label="/ min"
 							/>
 						</>
-					)}
+					)} */}
 					{['boxCutout', 'circleCutout'].includes(toolSettings.toolMode) && (
 						<PlayerSlider
                             defaultSliderValue={200}
@@ -210,35 +244,43 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 					)}
 				</div>
 			</div>
-			<div className="control-group">
-				<div className="control-subgroup">
-					<PlayerControl id="skipBackButton" iconName="SkipBack" onClick={() => PlayerControls.setCurrentTime(0)} />
-					<PlayerControl id="stepBackButton" iconName="StepBack" onClick={() => PlayerControls.skip(-0.1)} />
-					<PlayerControl id="playPauseButton" iconName={playbackStatus.playbackState === 'playing' ? 'Pause' : 'Play'} onClick={() => PlayerControls.playPause()} />
-					{/* <PlayerControl id="playButton" iconName={'Play'} onClick={() => PlayerControls.play()} /> */}
-					{/* <PlayerControl id="pauseButton" iconName={'Pause'} onClick={() => PlayerControls.pause()} /> */}
-					<PlayerControl id="stepForwardButton" iconName="StepForward" onClick={() => PlayerControls.skip(0.1)} />
-					<PlayerControl id="skipForwardButton" iconName="SkipForward" onClick={() => PlayerControls.setCurrentTime(playbackStatus.playbackEndTime - 0.1)} />
-				</div>
-			</div>
-			<div className="control-group">
-				<div className="control-subgroup">
-					<PlayerToggle
-						id="playLoopToggle"
-						iconName="IterationCw"
-						onChange={updateToolSettings}
-						value={toolSettings.playerLoop}
-						option="playerLoop"
-						title="Loop Medias"
-					/>
-					<PlayerRadioButtons id="playerSpeedButtonSet" buttonSet={playerSpeedSet} value={toolSettings.playerSpeed} autoFold />
-					{toolSettings.playerSpeed === 8 && (
-						<button title="Warning: 8x speed might cause performance issue such as de-sync and frame skipping" disabled>
-							<Icon name="TriangleAlert" color="yellow" />
-						</button>
-					)}
-				</div>
+			{hasAnyVideo && (
 				<div className="control-group">
+					<div className="control-subgroup">
+						<PlayerControl id="skipBackButton" iconName="SkipBack" onClick={() => PlayerControls.setCurrentTime(0)} />
+						<PlayerControl id="stepBackButton" iconName="StepBack" onClick={() => PlayerControls.skip(-0.1)} />
+						<PlayerControl id="playPauseButton" iconName={playbackStatus.playbackState === 'playing' ? 'Pause' : 'Play'} onClick={() => PlayerControls.playPause()} />
+						<PlayerControl id="stepForwardButton" iconName="StepForward" onClick={() => PlayerControls.skip(0.1)} />
+						<PlayerControl id="skipForwardButton" iconName="SkipForward" onClick={() => PlayerControls.setCurrentTime(playbackStatus.playbackEndTime - 0.1)} />
+					</div>
+					<div className="control-subgroup">
+						<PlayerToggle
+							id="playLoopToggle"
+							iconName="IterationCw"
+							onChange={updateToolSettings}
+							value={toolSettings.playerLoop}
+							option="playerLoop"
+							title="Loop Medias"
+						/>
+						<PlayerRadioButtons id="playerSpeedButtonSet" buttonSet={playerSpeedSet} value={toolSettings.playerSpeed} autoFold />
+						{toolSettings.playerSpeed === 8 && (
+							<button title="Warning: 8x speed might cause performance issue such as de-sync and frame skipping" disabled>
+								<Icon name="TriangleAlert" color="yellow" />
+							</button>
+						)}
+					</div>
+				</div>
+			)}
+			<div className="control-group">
+                    {isInElectron && (
+                        <button
+                            id='sizeWindowToFitVideo'
+                            title="Size Window to Fit Video"
+                            onClick={sizeWindowToFitVideo}
+                        >
+                            <Icon name="Minimize2" />
+                        </button>
+                    )}
 					<PlayerToggle
 						id="controllerBarPosition"
 						title="Use Floating Control Bar"
@@ -250,7 +292,6 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 					/>
 					{/* <PlayerControl id="settingsButton" iconName="SlidersVertical" title="Settings" className="ignore-disabled"/>
 					<ModalButton id="infoButton" iconName="Info" title="About this App" className="ignore-disabled"/> */}
-				</div>
 			</div>
 		</div>
 	);

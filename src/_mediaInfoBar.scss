@@ -1,0 +1,91 @@
+@use 'sass:color';
+@use '_variables' as *;
+@use '_colors';
+
+.media-info {
+	--spacing: 4px;
+	position: absolute;
+	inset: 1rem auto auto 1rem;
+
+	display: flex;
+	gap: var(--spacing);
+	align-items: center;
+	padding: var(--spacing);
+
+	color: var(--white);
+	font-size: 1rem;
+	font-weight: 500;
+	background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+	border-radius: calc(var(--radius) + var(--spacing));
+
+	box-shadow:
+		0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
+		0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+
+	backdrop-filter: blur(var(--controller-spacing));
+
+	height: auto;
+	max-width: calc(50% - 2rem);
+
+	z-index: 4;
+
+	button {
+		flex: 1 0 auto;
+	}
+
+	&.right-media-info {
+		inset: 1rem 1rem auto auto;
+        flex-direction: row-reverse;
+		justify-content: flex-end;
+	}
+
+	.media-label {
+		cursor: pointer;
+		transition:
+			color 0.15s ease-in-out,
+			filter 0.15s ease-in-out;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+
+		&.clickable:hover {
+			color: var(--pink);
+			filter: drop-shadow(0 0 0.25rem var(--pink));
+		}
+	}
+
+	.media-closer {
+		display: flex;
+		height: auto;
+
+		~ .media-closer {
+			inset: 1rem 1rem auto auto;
+		}
+
+		background: transparent;
+
+		color: var(--white);
+		svg {
+			fill: currentColor;
+			stroke: currentColor;
+		}
+
+		filter: drop-shadow(0 0 0.125rem var(--black));
+		cursor: pointer;
+
+		transform: scale(1);
+		transition:
+			transform 0.15s ease-in-out,
+			stroke 0.15s ease-in-out,
+			color 0.15s ease-in-out,
+			filter 0.15s ease-in-out;
+
+		z-index: 4;
+
+		&:hover {
+			color: var(--pink);
+			filter: drop-shadow(0 0 0.25rem var(--pink));
+			transform: scale(1.25);
+		}
+	}
+}

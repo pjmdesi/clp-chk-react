@@ -1,0 +1,43 @@
+:root {
+	--btnSize: 26px;
+	--spacing: 3px;
+	--font-size: 14px;
+	--radius: 6px;
+    --root-padding: 8px;
+
+	--user-divider-thickness: 0.25px;
+	--user-divider-color: var(--white);
+}
+
+$orange-gradient: linear-gradient(0deg, var(--pale-orange) 0%, var(--orange) 100%);
+$blue-gradient: linear-gradient(0deg, var(--gray-blue) 0%, var(--blue) 100%);
+$dark-blue-gradient: linear-gradient(0deg, var(--dark-blue) 0%, var(--darker-blue) 100%);
+
+// Bevel shadow effects
+$bevel-shadow-sink-in:
+	0 -1px 2px
+		rgba(
+			$color: var(--white-rgb),
+			$alpha: 0.1,
+		)
+		inset,
+	0 1px 2px
+		rgba(
+			$color: var(--black-rgb),
+			$alpha: 0.25,
+		)
+		inset;
+
+$bevel-shadow-pop-out:
+	0 1px 2px
+		rgba(
+			$color: var(--white-rgb),
+			$alpha: 0.05,
+		)
+		inset,
+	0 -1px 2px
+		rgba(
+			$color: var(--black-rgb),
+			$alpha: 0.2,
+		)
+		inset;

@@ -25,4 +25,10 @@
  *  });
  * ```
  */
+
+// Load mock Electron APIs when running in browser
+if (typeof process === 'undefined' || !process.versions || !process.versions.electron) {
+	import('./preload-mock.js');
+}
+
 import './app.jsx';

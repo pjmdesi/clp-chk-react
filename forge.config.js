@@ -50,8 +50,15 @@ module.exports = {
 			name: '@electron-forge/plugin-webpack',
 			config: {
 				devContentSecurityPolicy:
-					"default-src 'self' 'unsafe-inline' data: filesystem:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:; media-src 'self' 'unsafe-inline' data: filesystem:;",
+					"default-src 'self' 'unsafe-inline' data: filesystem: blob:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob:; media-src 'self' 'unsafe-inline' data: filesystem: blob:;",
 				mainConfig: './webpack.main.config.js',
+				devServer: {
+					hot: false,
+					liveReload: false,
+					client: false,
+				},
+				devtool: 'source-map',
+				port: 3000,
 				renderer: {
 					config: './webpack.renderer.config.js',
 					entryPoints: [

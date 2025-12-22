@@ -1,35 +1,36 @@
 $palette: (
-	'gray-blue': #aab6cc,
-	'pale-blue': #7f96c0,
-	'blue': #3e547e,
-	'dark-blue': #15223a,
-	'darker-blue': #0c1729,
-	'pale-orange': #ff9a61,
-	'orange': #f05e24,
-	'pink': #d12f1d,
-	'black': #000,
-	'white': #fff,
+	gray-blue: #aab6cc,
+	pale-blue: #7f96c0,
+	blue: #3e547e,
+	dark-blue: #15223a,
+	darker-blue: #0c1729,
+	pale-orange: #ff9a61,
+	orange: #f05e24,
+	pink: #d12f1d,
+	black: #000,
+	white: #fff,
 );
 
 $grays: (
-	'gray1': #1a1a1a,
-	'gray2': #333333,
-	'gray3': #4d4d4d,
-	'gray4': #666666,
-	'gray5': #808080,
-	'gray6': #999999,
-	'gray7': #b3b3b3,
-	'gray8': #cccccc,
+	gray1: #1a1a1a,
+	gray2: #333333,
+	gray3: #4d4d4d,
+	gray4: #666666,
+	gray5: #808080,
+	gray6: #999999,
+	gray7: #b3b3b3,
+	gray8: #cccccc,
 );
 
 :root {
     @each $name, $color in $palette {
-        --#{$name}: #{$color};
-        --#{$name}-rgb: #{red($color)}, #{green($color)}, #{blue($color)};
+        --#{"" + $name}: #{$color};
+        --#{"" + $name}-rgb: #{red($color)}, #{green($color)}, #{blue($color)};
     }
 
 	@each $gray, $gray-color in $grays {
-		--#{$gray}: #{$gray-color};
-		--#{$gray}-tinted: mix(#{$gray-color}, $blue, 10%);
+        --#{"" + $gray}: #{$gray-color};
+        --#{"" + $gray}-rgb: #{red($gray-color)}, #{green($gray-color)}, #{blue($gray-color)};
+		--#{"" + $gray}-tinted: mix(#{$gray-color}, $blue, 10%);
 	}
 }
