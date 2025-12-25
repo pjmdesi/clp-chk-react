@@ -92,6 +92,8 @@ body:has(#mainContainer.electron-mode) {
 
 	// overflow: hidden;
 
+	--floating-tools-spacing: 0px;
+
 	#restoreFilesPanel {
 		position: absolute;
 		top: 8px;
@@ -108,4 +110,8 @@ body:has(#mainContainer.electron-mode) {
 		backdrop-filter: blur(8px);
 		z-index: 10;
 	}
+
+    &.floating-tools {
+        --floating-tools-spacing: 16px;
+    }
 }

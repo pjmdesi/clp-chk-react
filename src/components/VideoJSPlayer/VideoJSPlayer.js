@@ -10,10 +10,10 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 
 	React.useEffect(() => {
 		// Make sure Video.js player is only initialized once
-		if (!playerRef.current && containerRef.current) {
+		if (!playerRef.current && wrapperRef.current) {
 			const videoElement = document.createElement('video-js');
 			videoElement.classList.add('vjs-big-play-centered');
-			containerRef.current.appendChild(videoElement);
+			wrapperRef.current.appendChild(videoElement);
 			videoElementRef.current = videoElement;
 
 			const player = videojs(videoElement, {
@@ -189,7 +189,6 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 
 	return (
 		<div className="videojs-wrapper" ref={wrapperRef}>
-			<div ref={containerRef} />
 		</div>
 	);
 }

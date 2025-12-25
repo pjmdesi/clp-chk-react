@@ -2,7 +2,7 @@ import React from 'react';
 
 import MediaContainer from '../MediaContainer';
 import ControllerBar from '../ControllerBar';
-import { getFileHandle, getFileFromHandle } from '../../utils/fileHandleStore';
+// import { getFileHandle, getFileFromHandle } from '../../utils/fileHandleStore';
 import { saveFileMetadata, getFileMetadata } from '../../utils/fileMetadataStore';
 
 import { useResizeDetector } from 'react-resize-detector';
@@ -25,16 +25,19 @@ let defaultToolSettings = {
 			boxCutout: 200,
 			circleCutout: 200,
 		},
-        cutoutValueBounds: {
-            boxCutout: { min: 100, max: 500 },
-            circleCutout: { min: 100, max: 500 },
-        },
+		cutoutValueBounds: {
+			boxCutout: { min: 100, max: 500 },
+			circleCutout: { min: 100, max: 500 },
+		},
 	},
 	controllerBarOptions: {
 		floating: false,
 		position: 'bottom',
 	},
 	zoomScale: 1,
+    zoomMin: 0.25,
+    zoomMax: 6,
+    // Whether to invert the scroll zoom direction
 	swapScrollDirections: false,
 	// Playback speed for the video
 	playerSpeed: 1,
@@ -54,11 +57,18 @@ let defaultToolSettings = {
 	},
 };
 
-let defaultAppSettings = {
-	// Whether to show the tutorial (not implemented yet)
-	showTutorial: true,
-	swapScrollDirections: false,
-};
+// let defaultAppSettings = {
+// 	// Whether to show the tutorial (not implemented yet)
+// 	showTutorial: true,
+// 	swapScrollDirections: false,
+// };
+
+// Check if running in Electron or browser
+// In Electron, window.api is exposed by the preload script
+const isInElectron = !!(typeof window !== 'undefined' && window.api && window.api.openFile);
+const isInBrowser = !isInElectron;
+
+console.log(`Electron: ${isInElectron} | Browser: ${isInBrowser}`);
 
 function MainContainer() {
 	const defaultPlaybackStatus = {
@@ -70,9 +80,6 @@ function MainContainer() {
 		// Whether the user is currently scrubbing with the slider
 		isScrubbing: false,
 	};
-
-	// Check if running in browser (not Electron)
-	const isInBrowser = typeof window !== 'undefined' && !window.api;
 
 	// In Electron, we'll restore files from localStorage paths in useEffect
 	// const leftMediaFromMemory = '';
@@ -87,36 +94,34 @@ function MainContainer() {
 		localStorage.setItem('toolSettings', JSON.stringify(defaultToolSettings));
 	}
 
-    const mainContainerElem = React.useRef(null);
+	const mainContainerElem = React.useRef(null);
 
 	const [toolSettings, setToolSettings] = React.useState(defaultToolSettings),
 		[playbackStatus, setPlaybackStatus] = React.useState(defaultPlaybackStatus),
 		[leftMedia, setLeftMedia] = React.useState(null),
-		// [leftMedia, setLeftMedia] = React.useState(leftMediaFromMemory),
 		[rightMedia, setRightMedia] = React.useState(null),
-		// [rightMedia, setRightMedia] = React.useState(rightMediaFromMemory),
-		[viewportSize, setViewportSize] = React.useState({ width: window.innerWidth, height: window.innerHeight }),
+		[mainContainerSize, setMainContainerSize] = React.useState({ width: window.innerWidth, height: window.innerHeight }),
 		// [appSettings, setAppSettings] = React.useState(appSettingsMemory),
-		[pendingFileHandles, setPendingFileHandles] = React.useState(null),
+		// [pendingFileHandles, setPendingFileHandles] = React.useState(null),
 		[leftMediaMetaData, setLeftMediaMetaData] = React.useState(null),
 		[rightMediaMetaData, setRightMediaMetaData] = React.useState(null);
 
-    const updateViewportSize = ({ width, height }) => {
-        setViewportSize({ width, height });
-    };
+	const updateMainContainerSize = ({ width, height }) => {
+		setMainContainerSize({ width, height });
+	};
 
-    const { width, height, ref } = useResizeDetector({
-        targetRef: mainContainerElem,
-        onResize: updateViewportSize,
-    });
+	const { width, height, ref } = useResizeDetector({
+		targetRef: mainContainerElem,
+		onResize: updateMainContainerSize,
+	});
 
-    const resetStoredSettings = () => {
-        localStorage.removeItem('toolSettings');
-        localStorage.removeItem('appSettings');
-        // localStorage.removeItem('leftMediaPath');
-        // localStorage.removeItem('rightMediaPath');
-        window.location.reload();
-    }
+	const resetStoredSettings = () => {
+		localStorage.removeItem('toolSettings');
+		localStorage.removeItem('appSettings');
+		localStorage.removeItem('leftMediaPath');
+		localStorage.removeItem('rightMediaPath');
+		window.location.reload();
+	};
 
 	// Restore files from saved file handles in browser mode
 	// React.useEffect(() => {
@@ -167,111 +172,76 @@ function MainContainer() {
 	// 	}
 	// }, [isInBrowser]);
 
+
 	// Restore files from saved paths in Electron
-	// React.useEffect(() => {
-	// 	if (!isInBrowser) {
-	// 		const restoreElectronFiles = async () => {
-	// 			const leftPath = localStorage.getItem('leftMediaPath');
-	// 			const rightPath = localStorage.getItem('rightMediaPath');
+	React.useEffect(() => {
+		if (!isInBrowser) {
+			const restoreElectronFiles = async () => {
+				const leftPath = localStorage.getItem('leftMediaPath');
+				const rightPath = localStorage.getItem('rightMediaPath');
 
-	// 			// Restore left media from path
-	// 			if (leftPath) {
-	// 				try {
-	// 					const response = await fetch(leftPath);
-	// 					const arrayBuffer = await response.arrayBuffer();
+				// Restore left media from path
+				if (leftPath) {
+					try {
+						const response = await fetch(leftPath);
+						const arrayBuffer = await response.arrayBuffer();
 
-	// 					// Determine media type from file extension
-	// 					const ext = leftPath.split('.').pop().toLowerCase();
-	// 					const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
-	// 					const mimeType = isImage ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : 'video/mp4';
+						// Determine media type from file extension
+						const ext = leftPath.split('.').pop().toLowerCase();
+						const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
+						const mimeType = isImage ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : 'video/mp4';
 
-	// 					const blob = new Blob([arrayBuffer], { type: mimeType });
-	// 					const blobUrl = URL.createObjectURL(blob);
+						const blob = new Blob([arrayBuffer], { type: mimeType });
+						const blobUrl = URL.createObjectURL(blob);
 
-	// 					// Extract filename from path
-	// 					const fileName = leftPath.split(/[/\\]/).pop();
-	// 					saveFileMetadata(blobUrl, {
-	// 						fileName: fileName,
-	// 						filePath: leftPath,
-	// 						mediaType: isImage ? 'image' : 'video',
-	// 					});
+						// Extract filename from path
+						const fileName = leftPath.split(/[/\\]/).pop();
+						saveFileMetadata(blobUrl, {
+							fileName: fileName,
+							filePath: leftPath,
+							mediaType: isImage ? 'image' : 'video',
+						});
 
-	// 					setLeftMedia(blobUrl);
-	// 				} catch (error) {
-	// 					console.error('Error restoring left media:', error);
-	// 					// Clear invalid path
-	// 					localStorage.removeItem('leftMediaPath');
-	// 				}
-	// 			}
-
-	// 			// Restore right media from path
-	// 			if (rightPath) {
-	// 				try {
-	// 					const response = await fetch(rightPath);
-	// 					const arrayBuffer = await response.arrayBuffer();
-
-	// 					// Determine media type from file extension
-	// 					const ext = rightPath.split('.').pop().toLowerCase();
-	// 					const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
-	// 					const mimeType = isImage ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : 'video/mp4';
-
-	// 					const blob = new Blob([arrayBuffer], { type: mimeType });
-	// 					const blobUrl = URL.createObjectURL(blob);
-
-	// 					// Extract filename from path
-	// 					const fileName = rightPath.split(/[/\\]/).pop();
-	// 					saveFileMetadata(blobUrl, {
-	// 						fileName: fileName,
-	// 						filePath: rightPath,
-	// 						mediaType: isImage ? 'image' : 'video',
-	// 					});
-
-	// 					setRightMedia(blobUrl);
-	// 				} catch (error) {
-	// 					console.error('Error restoring right media:', error);
-	// 					// Clear invalid path
-	// 					localStorage.removeItem('rightMediaPath');
-	// 				}
-	// 			}
-	// 		};
-
-	// 		restoreElectronFiles();
-	// 	}
-	// }, [isInBrowser]);
-
-    React.useEffect(() => {
-        // Listen for size-window-to-fit-video IPC message from main process
-		if (!isInBrowser && window.api?.onSizeWindowToFitVideo) {
-			const cleanup = window.api.onSizeWindowToFitVideo(() => {
-				// Get video dimensions from the first loaded video
-				const videoElement = document.querySelector('video');
-				if (videoElement) {
-					const videoWidth = videoElement.videoWidth;
-					const videoHeight = videoElement.videoHeight;
-
-					if (videoWidth && videoHeight) {
-						// Get the root padding from CSS variable
-						const rootElement = document.documentElement;
-						const rootPadding = parseFloat(getComputedStyle(rootElement).getPropertyValue('--root-padding')) || 8;
-
-						// Get controller bar height
-						const controllerBar = document.querySelector('#controllerBar');
-						const controllerBarHeight = controllerBar ? controllerBar.offsetHeight : 100;
-
-						// Calculate window size to fit video
-						// Add padding on both sides (left + right, top + bottom)
-						const targetWidth = videoWidth + (rootPadding * 2);
-						const targetHeight = videoHeight + controllerBarHeight + (rootPadding * 2);
-
-						// Resize window using the exposed API
-						if (window.api?.resizeWindow) {
-							window.api.resizeWindow({ width: targetWidth, height: targetHeight });
-						}
+						setLeftMedia(blobUrl);
+					} catch (error) {
+						console.error('Error restoring left media:', error);
+						// Clear invalid path
+						localStorage.setItem('leftMediaPath', '');
 					}
 				}
-			});
 
-			return cleanup; // Cleanup listener on unmount
+				// Restore right media from path
+				if (rightPath) {
+					try {
+						const response = await fetch(rightPath);
+						const arrayBuffer = await response.arrayBuffer();
+
+						// Determine media type from file extension
+						const ext = rightPath.split('.').pop().toLowerCase();
+						const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
+						const mimeType = isImage ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : 'video/mp4';
+
+						const blob = new Blob([arrayBuffer], { type: mimeType });
+						const blobUrl = URL.createObjectURL(blob);
+
+						// Extract filename from path
+						const fileName = rightPath.split(/[/\\]/).pop();
+						saveFileMetadata(blobUrl, {
+							fileName: fileName,
+							filePath: rightPath,
+							mediaType: isImage ? 'image' : 'video',
+						});
+
+						setRightMedia(blobUrl);
+					} catch (error) {
+						console.error('Error restoring right media:', error);
+						// Clear invalid path
+						localStorage.setItem('rightMediaPath', '');
+					}
+				}
+			};
+
+			restoreElectronFiles();
 		}
 	}, [isInBrowser]);
 
@@ -303,7 +273,7 @@ function MainContainer() {
 			if (leftMedia && rightMedia) {
 				setPlaybackStatus(prevStatus => ({
 					...prevStatus,
-					playbackState: prevStatus.playbackState === 'paused' ? 'playing' : 'paused'
+					playbackState: prevStatus.playbackState === 'paused' ? 'playing' : 'paused',
 				}));
 			}
 		},
@@ -311,7 +281,7 @@ function MainContainer() {
 			if (leftMedia && rightMedia) {
 				setPlaybackStatus(prevStatus => ({
 					...prevStatus,
-					playbackState: 'playing'
+					playbackState: 'playing',
 				}));
 			}
 		},
@@ -319,7 +289,7 @@ function MainContainer() {
 			if (leftMedia && rightMedia) {
 				setPlaybackStatus(prevStatus => ({
 					...prevStatus,
-					playbackState: 'paused'
+					playbackState: 'paused',
 				}));
 			}
 		},
@@ -328,15 +298,15 @@ function MainContainer() {
 				setPlaybackStatus(prevStatus => ({
 					...prevStatus,
 					playbackState: 'paused',
-					playbackPosition: prevStatus.playbackPosition + time
+					playbackPosition: prevStatus.playbackPosition + time,
 				}));
-            }
+			}
 		},
 		setCurrentTime: time => {
-            if (leftMedia && rightMedia) {
+			if (leftMedia && rightMedia) {
 				setPlaybackStatus(prevStatus => ({
 					...prevStatus,
-					playbackPosition: time
+					playbackPosition: time,
 				}));
 			}
 		},
@@ -344,65 +314,66 @@ function MainContainer() {
 			if (leftMedia && rightMedia) {
 				setPlaybackStatus(prevStatus => ({
 					...prevStatus,
-					playbackEndTime: time
+					playbackEndTime: time,
 				}));
 			}
 		},
-		setIsScrubbing: (isScrubbing) => {
+		setIsScrubbing: isScrubbing => {
 			if (leftMedia && rightMedia) {
 				setPlaybackStatus(prevStatus => ({
 					...prevStatus,
-					isScrubbing: isScrubbing
+					isScrubbing: isScrubbing,
 				}));
 			}
 		},
 	};
 
-	// React.useEffect(() => {
-	// 	// In Electron, save file path (not blob URL) to localStorage
-	// 	if (!isInBrowser && leftMedia) {
-	// 		const metadata = getFileMetadata(leftMedia);
-	// 		if (metadata?.filePath) {
-	// 			localStorage.setItem('leftMediaPath', metadata.filePath);
-	// 		}
-	// 	} else if (!leftMedia) {
-	// 		// Clear if media is removed
-	// 		localStorage.removeItem('leftMediaPath');
-	// 	}
-	// }, [leftMedia, isInBrowser]);
+    // In Electron, save left file path (not blob URL) to localStorage
+	React.useEffect(() => {
+		if (!isInBrowser && leftMedia) {
+			const metadata = getFileMetadata(leftMedia);
+			if (metadata?.filePath) {
+				localStorage.setItem('leftMediaPath', metadata.filePath);
+			}
+		} else if (!leftMedia) {
+			// Clear if media is removed
+			localStorage.removeItem('leftMediaPath');
+		}
+	}, [leftMedia, isInBrowser]);
 
-	// React.useEffect(() => {
-	// 	// In Electron, save file path (not blob URL) to localStorage
-	// 	if (!isInBrowser && rightMedia) {
-	// 		const metadata = getFileMetadata(rightMedia);
-	// 		if (metadata?.filePath) {
-	// 			localStorage.setItem('rightMediaPath', metadata.filePath);
-	// 		}
-	// 	} else if (!rightMedia) {
-	// 		// Clear if media is removed
-	// 		localStorage.removeItem('rightMediaPath');
-	// 	}
-	// }, [rightMedia, isInBrowser]);
+    // In Electron, save right file path (not blob URL) to localStorage
+	React.useEffect(() => {
+		if (!isInBrowser && rightMedia) {
+			const metadata = getFileMetadata(rightMedia);
+			if (metadata?.filePath) {
+				localStorage.setItem('rightMediaPath', metadata.filePath);
+			}
+		} else if (!rightMedia) {
+			// Clear if media is removed
+			localStorage.removeItem('rightMediaPath');
+		}
+	}, [rightMedia, isInBrowser]);
 
+    // Save tool settings to localStorage when they change
 	React.useEffect(() => {
 		localStorage.setItem('toolSettings', JSON.stringify(toolSettings));
 	}, [toolSettings]);
 
-    // When left or right media are removed, reset mediaMetaData
-    React.useEffect(() => {
-        if (!leftMedia) {
-            setLeftMediaMetaData(null);
-        }
-    }, [leftMedia]);
-
-    React.useEffect(() => {
+	// When left or right media are removed, reset mediaMetaData
+	React.useEffect(() => {
+		if (!leftMedia) {
+			setLeftMediaMetaData(null);
+		}
         if (!rightMedia) {
             setRightMediaMetaData(null);
         }
-    }, [rightMedia]);
+	}, [leftMedia, rightMedia]);
 
 	return (
-		<div id="mainContainer" ref={mainContainerElem} className={isInBrowser ? 'browser-mode' : 'electron-mode'}>
+		<div id="mainContainer" ref={mainContainerElem} className={[
+                isInBrowser ? 'browser-mode' : 'electron-mode',
+                toolSettings.controllerBarOptions.floating ? 'floating-tools' : '',
+            ].join(' ').trim()}>
 			{/* {pendingFileHandles && (
 				<div id='restoreFilesPanel'>
 					<button
@@ -422,12 +393,14 @@ function MainContainer() {
 				setLeftMedia={setLeftMedia}
 				setRightMedia={setRightMedia}
 				PlayerControls={PlayerControls}
-				viewportSize={viewportSize}
+				mainContainerSize={mainContainerSize}
 				leftMediaMetaData={leftMediaMetaData}
 				setLeftMediaMetaData={setLeftMediaMetaData}
 				rightMediaMetaData={rightMediaMetaData}
 				setRightMediaMetaData={setRightMediaMetaData}
-                resetStoredSettings={resetStoredSettings}
+				resetStoredSettings={resetStoredSettings}
+				isInElectron={isInElectron}
+				isInBrowser={isInBrowser}
 			/>
 			<ControllerBar
 				toolSettings={toolSettings}
@@ -439,9 +412,11 @@ function MainContainer() {
 				setToolSettings={setToolSettings}
 				playbackStatus={playbackStatus}
 				PlayerControls={PlayerControls}
-				viewportSize={viewportSize}
+				mainContainerSize={mainContainerSize}
 				leftMediaMetaData={leftMediaMetaData}
 				rightMediaMetaData={rightMediaMetaData}
+				isInElectron={isInElectron}
+				isInBrowser={isInBrowser}
 			/>
 		</div>
 	);

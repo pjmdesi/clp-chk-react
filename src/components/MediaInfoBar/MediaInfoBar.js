@@ -26,9 +26,22 @@ function MediaInfoBar({ toolSettings, setToolSettings, mediaSource, setMediaSour
 				className="media-meta-data"
 				type="button"
 				onClick={() => {
-					const durationText = leftMediaType === 'video' ? `<p>Duration: ${leftMediaMetaData.duration.toFixed(2)}s</p>` : '';
-					const content = `<h3>Left Media Info</h3><h6><small>Source: ${leftMedia}</small></h6>${durationText}<p>Width: ${leftMediaMetaData.width}px</p><p>Height: ${leftMediaMetaData.height}px</p>`;
+					//! Eventual convert this to use a modal instead of overlay info
+
+					let content = `<h1>${props.mediaSide.charAt(0).toUpperCase() + props.mediaSide.slice(1)} Media Info</h1>`;
+					for (const [key, value] of Object.entries(mediaMetaData)) {
+						if (mediaType === 'image' && (key === 'duration' || key === 'framerate')) {
+							continue; // Skip duration and framerate for images
+						}
+						const valueText = `${key.charAt(0).toUpperCase() + key.slice(1)}`;
+						const unitText = key === 'width' || key === 'height' ? 'px' : key === 'duration' ? 's' : key === 'framerate' ? 'fps' : '';
+						content += `<p><strong>${valueText}:</strong>&nbsp;${value}&nbsp;${unitText}</p>`;
+					}
 					setContainerOverlayInfo(content, true);
+
+					setTimeout(() => {
+						setContainerOverlayInfo('', false);
+					}, 10000);
 				}}>
 				<Icon name="Info" />
 			</button>

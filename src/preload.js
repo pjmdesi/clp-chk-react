@@ -8,7 +8,6 @@ const environment = process.env.NODE_ENV || 'production';
 
 const DEV = environment === 'development';
 
-
 const options = {
 	backgroundColor: TitlebarColor.fromHex('#0000'),
 	itemBackgroundColor: TitlebarColor.fromHex('#08162F'),
@@ -18,13 +17,10 @@ const options = {
 
 contextBridge.exposeInMainWorld('api', {
 	openFile: filePath => ipcRenderer.send('open-file', filePath),
-	onSizeWindowToFitVideo: (callback) => {
-		ipcRenderer.on('size-window-to-fit-video', callback);
-		// Return cleanup function
-		return () => ipcRenderer.removeListener('size-window-to-fit-video', callback);
-	},
-	triggerSizeToFit: () => ipcRenderer.send('trigger-size-to-fit'),
-	resizeWindow: (dimensions) => ipcRenderer.send('resize-window', dimensions),
+	resizeWindow: dimensions => {
+        console.log(`Setting dimensions to: ${dimensions.width}, ${dimensions.height}`);
+        ipcRenderer.send('resize-window', dimensions)
+    },
 });
 
 window.addEventListener('DOMContentLoaded', () => {

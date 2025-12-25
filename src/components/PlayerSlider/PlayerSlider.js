@@ -17,6 +17,7 @@ function PlayerSlider({
 	useSignificantFigures,
 	direction,
 	valueFormatter = null,
+    className = '',
 	...props
 }) {
 	if (typeof defaultSliderValue === 'undefined') {
@@ -92,7 +93,7 @@ function PlayerSlider({
 	};
 
 	return (
-		<div className="control-slider-container" {...props}>
+		<div className={['control-slider-container', className].join(' ')} {...props}>
 			<Slider
 				min={sliderMinMax[0]}
 				max={sliderMinMax[1]}

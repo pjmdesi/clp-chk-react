@@ -2,16 +2,15 @@
 @use '_colors';
 
 #controllerBar {
-	--controller-spacing: 0px;
     --controller-padding: 8px;
 
-	// flex: 0 0 calc(32px + var(--controller-spacing));
+	// flex: 0 0 calc(32px + var(--floating-tools-spacing));
 
-	padding-left: calc(var(--controller-spacing) / 2);
-	padding-right: calc(var(--controller-spacing) / 2);
+	padding-left: calc(var(--floating-tools-spacing) / 2);
+	padding-right: calc(var(--floating-tools-spacing) / 2);
     padding-top: var(--controller-padding);
-    padding-bottom: calc(var(--controller-spacing) / 2);
-	inset: auto var(--controller-spacing) var(--controller-spacing);
+    padding-bottom: calc(var(--floating-tools-spacing) / 2);
+	inset: auto var(--floating-tools-spacing) var(--floating-tools-spacing);
 	border-radius: 0 0 8px 8px;
 
 	background-color: var(--dark-blue);
@@ -80,11 +79,8 @@
 	}
 
 	&.floating {
-		--controller-spacing: 16px;
-		// position: absolute;
-
 		background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
-		border-radius: var(--controller-spacing);
+		border-radius: var(--floating-tools-spacing);
 
 		opacity: 0;
 
@@ -92,7 +88,7 @@
 			0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
 			0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
 
-		backdrop-filter: blur(var(--controller-spacing));
+		backdrop-filter: blur(var(--floating-tools-spacing));
 
 		animation: position-delay-rel-to-abs;
 		animation-duration: 0s;

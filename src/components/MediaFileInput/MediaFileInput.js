@@ -3,12 +3,7 @@ import Icon from '../Icon';
 import { saveFileHandle } from '../../utils/fileHandleStore';
 import { saveFileMetadata } from '../../utils/fileMetadataStore';
 
-function MediaFileInput({ setMediaFile, mediaKey }) {
-	// Check if running in Electron or browser
-	// In Electron, window.api is exposed by the preload script
-	const isInElectron = typeof window !== 'undefined' && window.api && window.api.openFile;
-	const isInBrowser = !isInElectron;
-
+function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 	const [isDragging, setIsDragging] = React.useState(false);
 
 	const handleClick = async (e) => {

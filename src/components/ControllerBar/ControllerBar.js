@@ -8,9 +8,22 @@ import PlayerToggle from '../PlayerToggle/PlayerToggle';
 import Icon from '../Icon';
 import { secondsToTimecode } from '../../utils/timecode';
 
-function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedia, rightMedia, setLeftMedia, setRightMedia, PlayerControls, leftMediaMetaData, rightMediaMetaData, valueFormatter = null }) {
-
-    const [hasAnyVideo, setHasAnyVideo] = React.useState(false);
+function ControllerBar({
+	toolSettings,
+	setToolSettings,
+	playbackStatus,
+	leftMedia,
+	rightMedia,
+	setLeftMedia,
+	setRightMedia,
+	PlayerControls,
+	leftMediaMetaData,
+	rightMediaMetaData,
+	viewportSize,
+	isInElectron,
+}) {
+	const [hasAnyVideo, setHasAnyVideo] = React.useState(false);
+	const [windowIsSmallerThanMedia, setWindowIsSmallerThanMedia] = React.useState(null);
 
 	const updateToolSettings = (newSettingVal, setting) => {
 		const newSettings = { ...toolSettings };
@@ -52,20 +65,61 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 		setRightMedia(newRightMedia);
 	};
 
-    const sizeWindowToFitVideo = () => {
-        if (typeof window !== 'undefined' && window.api && window.api.triggerSizeToFit) {
-            window.api.triggerSizeToFit();
-        }
-    };
+	const sizeWindowToFitMedia = () => {
+		console.log('[ControllerBar] sizeWindowToFitMedia called');
+		if (leftMediaMetaData && rightMediaMetaData) {
+			// get media elements dimensions
+			const leftVideoWidth = leftMediaMetaData.width || 0;
+			const leftVideoHeight = leftMediaMetaData.height || 0;
 
-    // Check if running in Electron
-    const isInElectron = typeof window !== 'undefined' && window.api && window.api.triggerSizeToFit;
+			const rightVideoWidth = rightMediaMetaData.width || 0;
+			const rightVideoHeight = rightMediaMetaData.height || 0;
+
+			// Determine the larger dimensions
+			const videoWidth = Math.max(leftVideoWidth, rightVideoWidth);
+			const videoHeight = Math.max(leftVideoHeight, rightVideoHeight);
+
+			console.log(`Detected video dimensions: ${videoWidth}x${videoHeight}`);
+
+			if (videoWidth && videoHeight) {
+				let targetWidth = videoWidth;
+				let targetHeight = videoHeight;
+
+				// Calculate target window size including some extra space for borders/toolbars
+				const rootElem = document.getElementById('root');
+
+				// get padding from rendered root element styles
+				const rootStyles = window.getComputedStyle(rootElem);
+				const rootExtraWidth = parseFloat(rootStyles.paddingLeft) + parseFloat(rootStyles.paddingRight);
+				const rootExtraHeight = parseFloat(rootStyles.paddingTop) + parseFloat(rootStyles.paddingBottom);
+
+				targetWidth += rootExtraWidth;
+				targetHeight += rootExtraHeight;
+
+				if (!toolSettings.controllerBarOptions.floating) {
+					const controllerBarElem = document.getElementById('controllerBar');
+					const controllerBarExtraHeight = controllerBarElem ? controllerBarElem.offsetHeight : 0;
+
+					targetHeight += controllerBarExtraHeight;
+				}
+
+				console.log(`Calculated window dimensions: ${targetWidth}, ${targetHeight}`);
+
+				// Resize window using the exposed API
+				if (window.api?.resizeWindow) {
+					console.log(`Resizing window to fit media: ${targetWidth}, ${targetHeight}`);
+
+					window.api.resizeWindow({ width: targetWidth, height: targetHeight });
+				}
+			}
+		}
+	};
 
 	const toolModeSet = {
 		divider: {
 			name: 'divider',
 			icon: 'SeparatorVertical',
-			label: 'Straight Divider',
+			label: 'Vertical Divider',
 			action: () => updateToolSettings('divider', 'toolMode'),
 			optionSet: {
 				backAndForth: {
@@ -88,6 +142,32 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 				},
 			},
 		},
+        horizontalDivider: {
+            name: 'horizontalDivider',
+            icon: 'SeparatorHorizontal',
+            label: 'Horizontal Divider',
+            action: () => updateToolSettings('horizontalDivider', 'toolMode'),
+            optionSet: {
+                backAndForth: {
+                    name: 'backAndForth',
+                    icon: 'ArrowUpDown',
+                    label: 'Back and Forth',
+                    action: () => updateToolSettingOptions('backAndForth', 'type'),
+                },
+                topToBottom: {
+                    name: 'topToBottom',
+                    icon: 'ArrowDownFromLine',
+                    label: 'Top to Bottom',
+                    action: () => updateToolSettingOptions('topToBottom', 'type'),
+                },
+                bottomToTop: {
+                    name: 'bottomToTop',
+                    icon: 'ArrowUpFromLine',
+                    label: 'Bottom to Top',
+                    action: () => updateToolSettingOptions('bottomToTop', 'type'),
+                },
+            },
+        },
 		circleCutout: {
 			name: 'circleCutout',
 			value: 'circleCutout',
@@ -161,14 +241,29 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 	// Determine if we have videos or only images
 	const leftMediaType = leftMediaMetaData?.mediaType || null;
 	const rightMediaType = rightMediaMetaData?.mediaType || null;
-	const bothAreImages = leftMediaType === 'image' && rightMediaType === 'image';
 
-    React.useEffect(() => {
-        setHasAnyVideo(leftMediaType === 'video' || rightMediaType === 'video');
-    }, [leftMediaMetaData, rightMediaMetaData]);
+	// Detect if window mediaContainer size is larger or smaller than video size (use width only for now)
+	const mediaVsContainerSizeCheck = () => {
+		const [leftMediaElement, rightMediaElement] = [leftMediaMetaData ? leftMediaMetaData.width : 0, rightMediaMetaData ? rightMediaMetaData.width : 0];
+
+		const viewPortWidth = viewportSize ? viewportSize.width : window.innerWidth;
+
+		if (Math.max(leftMediaElement, rightMediaElement) > viewPortWidth) {
+			setWindowIsSmallerThanMedia(true);
+		} else {
+			setWindowIsSmallerThanMedia(false);
+		}
+	};
+
+	React.useEffect(() => {
+		setHasAnyVideo(leftMediaType === 'video' || rightMediaType === 'video');
+		mediaVsContainerSizeCheck();
+	}, [viewportSize, leftMediaMetaData, rightMediaMetaData, toolSettings.controllerBarOptions.floating]);
 
 	return (
-		<div id="controllerBar" className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${!leftMedia || !rightMedia ? ' disabled' : ''}${hasAnyVideo ? ' videos' : ''}`}>
+		<div
+			id="controllerBar"
+			className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${!leftMedia || !rightMedia ? ' disabled' : ''}${hasAnyVideo ? ' videos' : ''}`}>
 			{hasAnyVideo && (
 				<PlayerSlider
 					id="videoProgressSlider"
@@ -176,7 +271,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 					sliderMinMax={[0, playbackStatus.playbackEndTime]}
 					value={playbackStatus.playbackPosition}
 					stepValue={0.01}
-					onChange={(time) => {
+					onChange={time => {
 						PlayerControls.setCurrentTime(time);
 					}}
 					onChangeStart={() => {
@@ -184,7 +279,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 						PlayerControls.pause();
 						PlayerControls.setIsScrubbing(true);
 					}}
-					onChangeComplete={(time) => {
+					onChangeComplete={time => {
 						// First turn off scrubbing, then resume if needed
 						setTimeout(() => {
 							PlayerControls.setIsScrubbing(false);
@@ -195,7 +290,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 							}
 						}, 0);
 					}}
-					valueFormatter={(seconds) => secondsToTimecode(seconds, framerate)}
+					valueFormatter={seconds => secondsToTimecode(seconds, framerate)}
 				/>
 			)}
 			<div className="control-group">
@@ -231,7 +326,7 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 					)} */}
 					{['boxCutout', 'circleCutout'].includes(toolSettings.toolMode) && (
 						<PlayerSlider
-                            defaultSliderValue={200}
+							defaultSliderValue={200}
 							id="clipperSizeSlider"
 							name="Tool Size"
 							sliderMinMax={[100, 500]}
@@ -272,26 +367,23 @@ function ControllerBar({ toolSettings, setToolSettings, playbackStatus, leftMedi
 				</div>
 			)}
 			<div className="control-group">
-                    {isInElectron && (
-                        <button
-                            id='sizeWindowToFitVideo'
-                            title="Size Window to Fit Video"
-                            onClick={sizeWindowToFitVideo}
-                        >
-                            <Icon name="Minimize2" />
-                        </button>
-                    )}
-					<PlayerToggle
-						id="controllerBarPosition"
-						title="Use Floating Control Bar"
-						iconName="Dock"
-						onChange={updateControllerBarOptions}
-						value={toolSettings.controllerBarOptions.floating}
-						option="floating"
-						className="ignore-disabled"
-					/>
-					{/* <PlayerControl id="settingsButton" iconName="SlidersVertical" title="Settings" className="ignore-disabled"/>
-					<ModalButton id="infoButton" iconName="Info" title="About this App" className="ignore-disabled"/> */}
+				<PlayerToggle
+					id="controllerBarPosition"
+					title="Use Floating Control Bar"
+					iconName="Dock"
+					onChange={updateControllerBarOptions}
+					value={toolSettings.controllerBarOptions.floating}
+					option="floating"
+					className="ignore-disabled"
+				/>
+				{isInElectron && (
+					<button id="sizeWindowToFitMedia" title="Size Window to Fit Larger Media Dimensions at 100% Scale" onClick={sizeWindowToFitMedia}>
+						<Icon name={windowIsSmallerThanMedia ? 'Maximize2' : 'Minimize2'} />
+					</button>
+				)}
+				<button id="settingsModalButton" title="Open Settings" onClick={() => console.log('Open Settings Modal')}>
+					<Icon name="Settings" />
+				</button>
 			</div>
 		</div>
 	);

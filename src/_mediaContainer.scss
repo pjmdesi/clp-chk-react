@@ -16,7 +16,10 @@
 
 	box-shadow: 0 1px 6px 0px rgba($color: var(--black-rgb), $alpha: 0.8);
 
-	transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, border-radius 0.2s ease-in-out;
+	transition:
+		transform 0.2s ease-in-out,
+		box-shadow 0.2s ease-in-out,
+		border-radius 0.2s ease-in-out;
 
 	--static-dark: var(--gray5);
 	--static-light: var(--gray7);
@@ -24,30 +27,32 @@
 	#infoOverlayElem {
 		position: absolute;
 		display: flex;
-        flex-direction: column;
+		flex-direction: column;
 		width: 100%;
 		height: 100%;
 		align-items: center;
 		justify-content: center;
 
-        pointer-events: none;
+		pointer-events: none;
 
-		font-size: 3rem;
-		text-shadow: 1px 0px 2px var(--black), 0px 1px 2px var(--black), -1px 0px 2px var(--black), 0px -1px 2px var(--black);
-        white-space: pre;
-        text-align: center;
-
-        font-weight: 700;
+		font-size: 1.5rem;
+		text-shadow:
+			1px 0px 2px var(--black),
+			0px 1px 2px var(--black),
+			-1px 0px 2px var(--black),
+			0px -1px 2px var(--black);
+		white-space: pre;
+		text-align: center;
 
 		z-index: 4;
-        opacity: 1;
+		opacity: 1;
 
-        transition: opacity 0.15s ease-in-out;
+		transition: opacity 0.15s ease-in-out;
 
-        &:not(:has(*)) {
-            opacity: 0;
-            transition: opacity 0.5s ease-in-out;
-        }
+		&:not(:has(*)) {
+			opacity: 0;
+			transition: opacity 0.5s ease-in-out;
+		}
 	}
 
 	#validationWarnings {
@@ -100,25 +105,28 @@
 		}
 	}
 
-
 	&.empty,
 	&:has(.auto) {
 		cursor: default;
 	}
 
-    &:has(#videoClipper.divider:not(.stuck)) {
-        cursor: col-resize;
-    }
+	&:has(#videoClipper.divider:not(.stuck)) {
+		cursor: col-resize;
+	}
+
+	&:has(#videoClipper.horizontalDivider:not(.stuck)) {
+		cursor: row-resize;
+	}
 
 	&.zoom-out-anim {
 		transform: scale(1.005);
-        border-radius: 13px;
+		border-radius: 13px;
 		box-shadow: 0 0 4px 4px rgba($color: var(--pink-rgb), $alpha: 1);
 	}
 
 	&.zoom-in-anim {
-        transform: scale(0.994, 0.989);
-        border-radius: 0;
+		transform: scale(0.994, 0.989);
+		border-radius: 0;
 		box-shadow: 0 0 4px 3px rgba($color: var(--pink-rgb), $alpha: 1);
 	}
 
@@ -149,14 +157,19 @@
 		height: var(--input-size);
 
 		background: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
-		box-shadow: inset 0px 3px 8px rgba(255, 255, 255, 0.1), inset 0px -3px 8px rgba(0, 0, 0, 0.25);
+		box-shadow:
+			inset 0px 3px 8px rgba(255, 255, 255, 0.1),
+			inset 0px -3px 8px rgba(0, 0, 0, 0.25);
 		backdrop-filter: blur(4px);
 		/* Note: backdrop-filter has minimal browser support */
 		border-radius: 16px;
 
 		appearance: none;
 
-		transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
+		transition:
+			background 0.15s ease-in-out,
+			box-shadow 0.15s ease-in-out,
+			transform 0.15s ease-in-out;
 
 		> span {
 			grid-column: 1 / -1;
@@ -176,58 +189,54 @@
 
 	// generate tv static
 
-	&.empty,
-	#videoClipper.empty {
-		background:
-        // repeating-radial-gradient(var(--static-dark) 0 0.0001%, var(--static-light) 0 0.0002%) 50% 0/2500px 2500px,
-			repeating-conic-gradient(var(--static-dark) 0 0.0001%, var(--static-light) 0 0.0002%) 60% 60%/2500px 2500px;
-		// background-blend-mode: color;
-		animation: static-anim 0.2s infinite alternate;
+	&.empty {
+		background: var(--black);
 	}
 
 	#videoClipper {
 		position: relative;
-        background-color: var(--black);
+		background-color: var(--black);
 		box-shadow: 2px 0 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
 
 		will-change: contents;
 
 		z-index: 0;
 
-		--icon-url: url("data:image/svg+xml, <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-unlock' viewBox='0 0 16 16'><path d='M11 1a2 2 0 0 0-2 2v4a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h5V3a3 3 0 0 1 6 0v4a.5.5 0 0 1-1 0V3a2 2 0 0 0-2-2M3 8a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1z'/></svg>");
-		--icon-color: var(--white);
-
-		&:after {
-			content: '';
-			background: var(--icon-color);
-			mask-image: var(--icon-url);
-			mask-size: contain;
-			mask-repeat: no-repeat;
+		#clipperLock {
 			position: absolute;
-
 			inset: 50% var(--spacing) auto auto;
-			width: 1.25rem;
-			height: 1.25rem;
+			width: 1.5rem;
+			height: 1.5rem;
+
+			--shadow-size: 0.5px;
+
+			filter: drop-shadow(0 0 var(--shadow-size) var(--black)) drop-shadow(0 0 var(--shadow-size) var(--black)) drop-shadow(0 0 var(--shadow-size) var(--black))
+				drop-shadow(0 0 var(--shadow-size) var(--black)) drop-shadow(0 0 var(--shadow-size) var(--black));
 
 			transform: translateY(-50%);
 
 			z-index: 4;
 		}
 
-		&.auto:after {
-			content: none;
-		}
-
-		&.flipped:after {
-			inset: 50% auto auto var(--spacing);
-		}
-
-		&.stuck {
-			--icon-url: url("data:image/svg+xml, <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' viewBox='0 0 16 16'><path d='M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2'/></svg>");
-			--icon-color: var(--pink);
+		&.empty {
+			background: var(--black);
 		}
 
 		&.divider {
+			box-shadow: 2px 0 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
+		}
+
+        &.horizontalDivider {
+            box-shadow: 0 2px 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
+
+            #clipperLock {
+                inset: auto auto var(--spacing) 50%;
+                transform: translateX(50%);
+            }
+        }
+
+		&.divider,
+		&.horizontalDivider {
 			width: 100%;
 			height: 100%;
 			top: 0;
@@ -243,7 +252,9 @@
 
 			box-shadow: 0 0 0 calc(var(--user-divider-thickness) + 0.75px) var(--user-divider-color);
 
-			transition: border-radius 0.25s ease-in-out, box-shadow 0.25s ease-in-out;
+			transition:
+				border-radius 0.25s ease-in-out,
+				box-shadow 0.25s ease-in-out;
 		}
 
 		&.circleCutout {
@@ -259,37 +270,27 @@
 		top: 50%;
 		transform: translate(-50%, -50%);
 		display: block;
-        pointer-events: none;
+		pointer-events: none;
 
-        > div {
-            display: contents;
-        }
+		> div {
+			display: contents;
+		}
 	}
 
 	// Video.js elements fill wrapper and centered
 	.video-js {
-		position: relative !important;
-		left: 0 !important;
-		top: 0 !important;
-		transform: none !important;
-		display: block;
-		width: 100% !important;
-		height: 100% !important;
-		background: transparent;
-		border: none;
-		outline: none;
+		display: contents;
 	}
 
 	// Native video elements (fallback)
 	// Images inside wrappers shouldn't have hardcoded positioning - let the wrapper handle it
 	video {
 		position: absolute !important;
-		left: 50% !important;
-		top: 50% !important;
-		transform: translate(-50%, -50%) !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
 		display: block;
-		width: unset;
-		height: unset;
 		object-fit: contain;
 		background: var(--black);
 		border: none;
@@ -341,7 +342,9 @@
 
 @keyframes static-anim {
 	100% {
-		background-position: 50% 0, 60% 50%;
+		background-position:
+			50% 0,
+			60% 50%;
 	}
 }
 

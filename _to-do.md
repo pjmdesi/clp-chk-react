@@ -4,7 +4,18 @@
 
 ## UI
 
-* circle toolMode is broken for videos again
+### Bugs / Issues (UI)
+
+* Only run the clip lock/unlock when clicking inside the video area when the window is focused. Otherwise, clicking outside the window and back in causes an unwanted toggle of the lock state.
+* Fix positioning/zoom for auto wiper for divider clipper
+* Need to account vertical video
+  * Zoom to fit height instead of width when video is taller than wide
+  * same with resizing window
+* Minimum window size for Electron app doesn't quite match that of the internal web app container minimum size
+
+### Features (UI)
+
+* Add a vertical divider clipper mode
 * Add slider to control volume for each vid (maybe scroll on volume button fills in button outline?)
 * Add warning when videos are not the same ratio / length
 * (?) If videos are different lengths:
@@ -16,15 +27,15 @@
   * Create Settings Menu using modals
 * Add settings panel
   * Allow swapping vertical scroll and horizontal scroll functions (vertical scroll = zoom | horizontal scroll = scrub <-> vertical scroll = scrub | horizontal scroll = zoom) [ use event listener: _**onwheel**_ and use x & y coordinates to distinguish between the 2 ]
+  * Invert zoom direction
   * Smooth Zoom (animate between zoom ticks)
   * Auto load last videos toggle
   * Zoom minimums and maximums
+  * Lock zoom on resize toggle
 * Add notes overlay
-* Add ability to change size of tool when right-clicking and dragging
-* add warning to indicate if different framerate
 * Allow user to switch between time elapsed / time remaining display on timecode
-* Fix controller css animation at app launch
-* Create info page for controls and keyboard shortcuts (if there ever are any)
+* Create info page for controls and keyboard shortcuts, maybe inside settings panel
+* add warning to indicate if different framerate
 * Keyboard controls
   * Frame stepping
   * Zoom in/out
@@ -37,15 +48,8 @@
   * (?) Clipper position controls
   * (?) Clipper lock toggle
   * (?) Reset zoom/offset
-* Fix positioning/zoom for auto divider clipper
 * Change remaining input to list different detected versions of the loaded file after one is added to a pane. It should still work as regular file picker input as well
 * Display audio waveform to indicate which / how loud each video is playing. [source](https://css-tricks.com/making-an-audio-waveform-visualizer-with-vanilla-javascript/)
-
-## App
-
-* Fix issue where selected tool doesn't re-select after closing and opening a new file in one of the panes
-  * Reproduce: Select any tool except divider, close one of the files, open a new file in the same pane, observe that divider is set as tool, but previously selected tool is still indicated in the controller bar.
-* Fix issue where previous saved files are not updated properly
 * Show errors
   * When unsupported file type is loaded
   * When file fails to load for any reason
@@ -55,6 +59,11 @@
   * Add A/B selector to select which panel gets replaced by the selected file in the loaded folder
   **[ A** | B ]
   * Allow user to drag files into the panes to replace ones currently there
+
+## App
+
+### Bugs / Issues (app)
+
 * Add memory to recall on next app launch:
   * ~~Videos from last session~~ (5/14/24)
     * This was working, but is now broken again, using a button to restore files
@@ -64,12 +73,28 @@
     2. along the same lines, if the video files have different framrates, the timecode slider should display that of the larger framerate.
     3. If the user inputs files of different dimesnions, they should still match in size, adjusting the smaller one to match that of the larger one.
     4. If the user inputs a video file in one panel, and an image in the other, the second input should be refused (it should match whatever was first).
-* Allow for rendering of comparison window to video file. _No idea how to do that..._ [Maybe this?](https://dev.to/yonatanbd/using-electron-to-create-videos-canvas-ffmpeg-5gdm)
+
+### Features (app)
+
+* Need to support GIF files
+  * For now, just treat them as special images (no playback controls, can only be paried with other GIFs)
+  * Eventually, add playback controls for GIFs as well and allow them to be compatible with video files
+* Allow for rendering of comparison media to file. _No idea how to do that..._ [Maybe this?](https://dev.to/yonatanbd/using-electron-to-create-videos-canvas-ffmpeg-5gdm)
+  * Images should render to jpg or allow user to choose format in settings
+  * Videos should render to mp4 or allow user to choose format in settings
+* Add ability to open files via file browser context menu (right-click on file -> Open with -> select app)
 
 ---
 
 ### Complete
 
+
+* ~~Auto resize button isn't quite correct, need to adjust to fit perfectly in both dimensions~~ (12/22/25)
+  * ~~Need to account for if video is larger than user's screen resolution~~ (12/22/25)
+  * ~~Adjust button icon to indicate if current size is larger or smaller than video's native size~~ (12/22/25)
+* ~~Fix issue where selected tool doesn't re-select after closing and opening a new file in one of the panes~~ (12/21/25)
+* ~~Add ability to change size of tool when right-clicking and dragging~~ (12/21/25)
+* ~~circle toolMode is broken for videos again~~ (12/21/25)
 * ~~Add ability to open images~~ (12/20/25)
 * ~~Fix file directory opening feature (clicking on the filename should open the containing folder of the file)~~ (12/20/25)
 * ~~Fix issue where panning doesn't work when clipping tool is locked.~~ (12/20/25)

@@ -3,6 +3,7 @@
         "dimen",
         "lucide",
         "rabbitholesyndrome",
+        "Unclipped",
         "videojs"
     ],
     "MinifyAll.minifyOnSaveToNewFile": false

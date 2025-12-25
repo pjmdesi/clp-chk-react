@@ -9,6 +9,7 @@ import ImagePlayer from '../ImagePlayer';
 import PlayerSlider from '../PlayerSlider';
 import { getFileMetadata } from '../../utils/fileMetadataStore';
 import MediaInfoBar from '../MediaInfoBar';
+import ClipperLock from '../ClipperLock';
 
 function InfoOverlay({ info }) {
 	return <div id="infoOverlayElem" dangerouslySetInnerHTML={{ __html: info }}></div>;
@@ -23,12 +24,14 @@ function MediaContainer({
 	setLeftMedia,
 	setRightMedia,
 	PlayerControls,
-	viewportSize,
+	mainContainerSize,
 	leftMediaMetaData,
 	setLeftMediaMetaData,
 	rightMediaMetaData,
 	setRightMediaMetaData,
 	resetStoredSettings,
+	isInElectron,
+	isInBrowser,
 }) {
 	const mediaContainerElem = React.useRef(),
 		leftMediaElem = React.useRef(),
@@ -38,24 +41,20 @@ function MediaContainer({
 	const [clipperPosition, setClipperPosition] = React.useState({ x: 50, y: 50 }),
 		[mediaOffset, setMediaOffset] = React.useState({ x: 0, y: 0 }),
 		[clipperStyle, setClipperStyle] = React.useState({ width: '50%' }),
-		[clipperFlip, setClipperFlip] = React.useState(false),
 		[clippedMediaWrapperStyle, setClippedMediaWrapperStyle] = React.useState({ minWidth: '200%', zIndex: 3 }),
-		[clippedMediaVideoStyle, setClippedMediaVideoStyle] = React.useState({ transform: 'translate(-50%, -50%)' }),
 		[unClippedMediaWrapperStyle, setUnClippedMediaWrapperStyle] = React.useState({ minWidth: '100%' }),
-		[unClippedMediaVideoStyle, setUnClippedMediaVideoStyle] = React.useState({ transform: 'translate(-50%, -50%)' }),
+		[unifiedMediaDimensions, setUnifiedMediaDimensions] = React.useState({ width: 0, height: 0, aspectRatio: 1 }),
 		[containerOverlayInfo, setContainerOverlayInfo] = React.useState(''),
-		[zoomSnap, setZoomSnap] = React.useState(null),
 		[toolModeBeforeMediaRemoval, setToolModeBeforeMediaRemoval] = React.useState('divider'),
+		// [clippedMediaVideoStyle, setClippedMediaStyle] = React.useState(null),
+		// [unClippedMediaVideoStyle, setUnClippedMediaVideoStyle] = React.useState(null),
+		// [zoomSnap, setZoomSnap] = React.useState(null),
 		// continuousClipInterval = React.useRef(null),
 		[validationWarnings, setValidationWarnings] = React.useState([]);
 
 	// Determine if media are images or videos
 	const leftMediaType = leftMediaMetaData?.mediaType || (leftMedia ? getFileMetadata(leftMedia)?.mediaType : null);
 	const rightMediaType = rightMediaMetaData?.mediaType || (rightMedia ? getFileMetadata(rightMedia)?.mediaType : null);
-	// const hasAnyVideo = leftMediaType === 'video' || rightMediaType === 'video';
-	// const bothAreImages = leftMediaType === 'image' && rightMediaType === 'image';
-
-	const isInBrowser = typeof process === 'undefined' || !process.versions || !process.versions.electron;
 
 	// Framerate detection refs
 	const leftFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null });
@@ -121,7 +120,7 @@ function MediaContainer({
 		}
 	}, [playbackStatus.playbackState, playbackStatus.playbackPosition, playbackStatus.isScrubbing, leftMediaType, rightMediaType, leftMediaMetaData, rightMediaMetaData]);
 
-	//! BROKEN
+	//! BROKEN: auto divider clipper
 	// Switches between auto and manual mode for the divider tool
 	// Also reapply when media files are loaded to ensure clipper is styled correctly
 	// React.useEffect(() => {
@@ -160,7 +159,8 @@ function MediaContainer({
 			newToolSettings.toolMode = 'divider';
 
 			setToolSettings(newToolSettings);
-			resetMediaClipper();
+			// resetMediaClipper();
+			clipMedia();
 		} else if (!hadMedia && nowHaveMedia && toolModeBeforeMediaRemoval !== 'divider') {
 			// Restore previous tool mode when both media are present again
 			const newToolSettings = { ...toolSettings };
@@ -206,14 +206,36 @@ function MediaContainer({
 			clipMedia();
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [toolSettings.zoomScale, viewportSize]);
+	}, [toolSettings.zoomScale, mainContainerSize]);
 
-	// Run clipMedia when metadata loads or media changes
+	// Run clipMedia and recalculate unified dimensions when metadata loads
 	React.useEffect(() => {
-		if (leftMedia || rightMedia) {
+
+        let unifiedWidth = 0,
+            unifiedHeight = 0,
+            unifiedAspectRatio = 1;
+
+        if (leftMediaMetaData && rightMediaMetaData) {
+            // Use the larger dimensions to ensure both fit
+            unifiedWidth = Math.max(leftMediaMetaData.width, rightMediaMetaData.width);
+            unifiedHeight = Math.max(leftMediaMetaData.height, rightMediaMetaData.height);
+            unifiedAspectRatio = unifiedHeight / unifiedWidth;
+        } else if (leftMediaMetaData) {
+            unifiedWidth = leftMediaMetaData.width;
+            unifiedHeight = leftMediaMetaData.height;
+            unifiedAspectRatio = unifiedHeight / unifiedWidth;
+        } else if (rightMediaMetaData) {
+            unifiedWidth = rightMediaMetaData.width;
+            unifiedHeight = rightMediaMetaData.height;
+            unifiedAspectRatio = unifiedHeight / unifiedWidth;
+        }
+
+        setUnifiedMediaDimensions({ width: unifiedWidth, height: unifiedHeight, aspectRatio: unifiedAspectRatio });
+
+		if (leftMediaMetaData || rightMediaMetaData) {
 			clipMedia();
 		}
-	}, [leftMedia, rightMedia, leftMediaMetaData, rightMediaMetaData]);
+	}, [leftMediaMetaData, rightMediaMetaData]);
 
 	// Update saved tool mode and run clipMedia when user changes the tool
 	React.useEffect(() => {
@@ -225,9 +247,9 @@ function MediaContainer({
 
 	// Display the new zoom info in the overlay info element when the media elements are resized
 	React.useEffect(() => {
-		const pixelPerfect = zoomSnap === 'pixel';
 		let rightMediaElemWidth = 0;
 		let rightMediaElemHeight = 0;
+        const zoomLevel = toolSettings.zoomScale;
 
 		if (rightMediaElem.current && rightMediaMetaData) {
 			// Calculate displayed dimensions based on media aspect ratio and zoom
@@ -243,10 +265,25 @@ function MediaContainer({
 			rightMediaElemHeight = rightMediaElemWidth * aspectRatio;
 		}
 
-		displayOverlayInfo(
-			`<h3>Zoom: ${Math.round(toolSettings.zoomScale * 100)}%</h3><h6>${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px ${pixelPerfect ? '[1:1]' : ''}</h6>`
-		);
-	}, [unClippedMediaWrapperStyle.minWidth, zoomSnap, toolSettings.zoomScale, rightMediaMetaData]);
+        let zoomInfo = `<h3>Zoom: ${Math.round(toolSettings.zoomScale * 100)}%</h3>`;
+
+        if (rightMediaMetaData && leftMediaMetaData) {
+            if (rightMediaMetaData.width === leftMediaMetaData.width) {
+                zoomInfo += `<h6>${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+            } else if (rightMediaMetaData.height === unifiedMediaDimensions.height) {
+                zoomInfo += `<h6>L: ${Math.round((rightMediaElemWidth * leftMediaMetaData.width) / rightMediaMetaData.width) || 0}px <small>⨉</small> ${Math.round((rightMediaElemHeight * leftMediaMetaData.height) / rightMediaMetaData.height) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+                zoomInfo += `<h6>R: ${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+            } else if (leftMediaMetaData.height === unifiedMediaDimensions.height) {
+                zoomInfo += `<h6>L: ${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+                zoomInfo += `<h6>R: ${Math.round((rightMediaElemWidth * rightMediaMetaData.width) / leftMediaMetaData.width) || 0}px <small>⨉</small> ${Math.round((rightMediaElemHeight * rightMediaMetaData.height) / leftMediaMetaData.height) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+            }
+        } else {
+            zoomInfo += `<h6>${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+        }
+
+		displayOverlayInfo(zoomInfo);
+
+	}, [toolSettings.zoomScale, rightMediaMetaData, leftMediaMetaData, unifiedMediaDimensions]);
 
 	// When the size of the cutout changes, re-clip the media
 	React.useEffect(() => {
@@ -451,20 +488,20 @@ function MediaContainer({
 		}
 	};
 
-	const resetMediaClipper = () => {
-		setClipperStyle({ width: '50%' });
-		setClippedMediaWrapperStyle({ minWidth: '200%', zIndex: 3 });
-		setClippedMediaVideoStyle({ left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(1)' });
-		setUnClippedMediaWrapperStyle({});
-		setUnClippedMediaVideoStyle({ left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(1)' });
-		setMediaOffset({ x: 0, y: 0 });
+	// const resetMediaClipper = () => {
+	// 	setClipperStyle({ width: '50%' });
+	// 	setClippedMediaWrapperStyle({ minWidth: '200%', zIndex: 3 });
+	// 	setClippedMediaStyle({ left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(1)' });
+	// 	setUnClippedMediaWrapperStyle({});
+	// 	setUnClippedMediaVideoStyle({ left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(1)' });
+	// 	setMediaOffset({ x: 0, y: 0 });
 
-		// Reset zoom to 100%
-		const newToolSettings = { ...toolSettings };
-		newToolSettings.toolMode = 'divider';
-		newToolSettings.zoomScale = 1;
-		setToolSettings(newToolSettings);
-	};
+	// 	// Reset zoom to 100%
+	// 	const newToolSettings = { ...toolSettings };
+	// 	newToolSettings.toolMode = 'divider';
+	// 	newToolSettings.zoomScale = 1;
+	// 	setToolSettings(newToolSettings);
+	// };
 
 	const displayOverlayInfoTimeout = React.useRef(null);
 
@@ -490,151 +527,13 @@ function MediaContainer({
 		// Use custom offset if provided, otherwise use state offset
 		const currentOffset = customOffset !== null ? customOffset : mediaOffset;
 
-		// Calculate unified dimensions - use the larger dimensions from both media
-		// This ensures both media are scaled to the same size
-		let unifiedWidth = 0;
-		let unifiedHeight = 0;
-		let unifiedAspectRatio = 1;
+		// Detect if media is portrait or landscape, default to
+		const mediaMajorDimension = unifiedMediaDimensions.aspectRatio >= 1 ? 'height' : 'width';
 
-		if (leftMediaMetaData && rightMediaMetaData) {
-			// Use the larger dimensions to ensure both fit
-			unifiedWidth = Math.max(leftMediaMetaData.width, rightMediaMetaData.width);
-			unifiedHeight = Math.max(leftMediaMetaData.height, rightMediaMetaData.height);
-			unifiedAspectRatio = unifiedHeight / unifiedWidth;
-		} else if (leftMediaMetaData) {
-			unifiedWidth = leftMediaMetaData.width;
-			unifiedHeight = leftMediaMetaData.height;
-			unifiedAspectRatio = unifiedHeight / unifiedWidth;
-		} else if (rightMediaMetaData) {
-			unifiedWidth = rightMediaMetaData.width;
-			unifiedHeight = rightMediaMetaData.height;
-			unifiedAspectRatio = unifiedHeight / unifiedWidth;
-		}
-
-		// Handle if either media is missing - still need to set wrapper styles for single media
-		if (!(leftMedia && rightMedia)) {
-			// Set wrapper styles for right media if it exists
-			if (rightMedia && rightMediaMetaData && mediaContElem.offsetWidth > 0) {
-				let rightWrapperStyle;
-
-				// Use unified aspect ratio for consistent sizing
-				const rightWrapperWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-				const rightWrapperHeightPx = rightWrapperWidthPx * unifiedAspectRatio;
-
-				if (rightMediaType === 'image') {
-					if (rightWrapperHeightPx > 0 && isFinite(rightWrapperHeightPx)) {
-						rightWrapperStyle = {
-							minWidth: `${100 * toolSettings.zoomScale}%`,
-							maxWidth: `${100 * toolSettings.zoomScale}%`,
-							height: rightWrapperHeightPx + 'px',
-							minHeight: rightWrapperHeightPx + 'px',
-							maxHeight: 'none',
-							width: 'auto',
-						};
-					}
-				} else {
-					// Videos: use unified aspect ratio
-					rightWrapperStyle = {
-						minWidth: `${100 * toolSettings.zoomScale}%`,
-						maxWidth: `${100 * toolSettings.zoomScale}%`,
-						height: rightWrapperHeightPx + 'px',
-						minHeight: rightWrapperHeightPx + 'px',
-						maxHeight: 'none',
-						width: 'auto',
-					};
-				}
-
-				if (rightWrapperStyle) {
-					setUnClippedMediaWrapperStyle(rightWrapperStyle);
-
-					const rightMediaStyle = {
-						left: '50%',
-						top: '50%',
-					};
-
-					if (rightMediaType === 'video' && rightMediaMetaData) {
-						// Use unified dimensions
-						const rightVideoWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-						const rightVideoHeightPx = rightWrapperHeightPx;
-						// Videos need wrapper height adjustment and explicit pixel dimensions
-						rightMediaStyle.width = rightVideoWidthPx + 'px';
-						rightMediaStyle.height = rightVideoHeightPx + 'px';
-						rightMediaStyle.transform = `translate(calc(-50% + ${currentOffset.x}px), calc(-50% + ${currentOffset.y + rightVideoHeightPx / 2}px))`;
-					} else {
-						// Images don't need the wrapper height adjustment
-						rightMediaStyle.transform = `translate(calc(-50% + ${currentOffset.x}px), calc(-50% + ${currentOffset.y}px))`;
-					}
-
-					setUnClippedMediaVideoStyle(rightMediaStyle);
-				}
-			}
-
-			// Set wrapper styles for left media if it exists
-			if (leftMedia && leftMediaMetaData) {
-				let leftWrapperStyle;
-
-				// Use unified aspect ratio for consistent sizing
-				const leftWrapperWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-				const leftWrapperHeightPx = leftWrapperWidthPx * unifiedAspectRatio;
-
-				if (leftMediaType === 'image') {
-					leftWrapperStyle = {
-						minWidth: `${100 * toolSettings.zoomScale}%`,
-						maxWidth: `${100 * toolSettings.zoomScale}%`,
-						height: leftWrapperHeightPx + 'px',
-						minHeight: leftWrapperHeightPx + 'px',
-						maxHeight: 'none',
-						width: 'auto',
-						zIndex: 3,
-					};
-				} else {
-					// Videos: use unified aspect ratio
-					leftWrapperStyle = {
-						minWidth: `${100 * toolSettings.zoomScale}%`,
-						maxWidth: `${100 * toolSettings.zoomScale}%`,
-						height: leftWrapperHeightPx + 'px',
-						minHeight: leftWrapperHeightPx + 'px',
-						maxHeight: 'none',
-						width: 'auto',
-						zIndex: 3,
-					};
-				}
-
-				setClippedMediaWrapperStyle(leftWrapperStyle);
-
-				const leftMediaStyle = {
-					left: '50%',
-					top: '50%',
-				};
-
-				if (leftMediaType === 'video' && leftMediaMetaData) {
-					// Use unified dimensions
-					const leftVideoWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-					const leftVideoHeightPx = leftWrapperHeightPx;
-					// Videos need wrapper height adjustment and explicit pixel dimensions
-					leftMediaStyle.width = leftVideoWidthPx + 'px';
-					leftMediaStyle.height = leftVideoHeightPx + 'px';
-					leftMediaStyle.transform = `translate(calc(-50% + ${currentOffset.x}px), calc(-50% + ${currentOffset.y + leftVideoHeightPx / 2}px))`;
-				} else {
-					// Images don't need the wrapper height adjustment
-					leftMediaStyle.transform = `translate(calc(-50% + ${currentOffset.x}px), calc(-50% + ${currentOffset.y}px))`;
-				}
-
-				setClippedMediaVideoStyle(leftMediaStyle);
-			}
-
-			return;
-		}
 		const containerOffset = {
 			left: mediaContElem.getBoundingClientRect().left,
 			top: mediaContElem.getBoundingClientRect().top,
 		};
-
-		// If no event is passed, set the container offset to 0
-		if (!event) {
-			containerOffset.left = 0;
-			containerOffset.top = 0;
-		}
 
 		// Get the cursor position based on the event or set it to the center of the container
 		let cursor = { x: event ? event.pageX : mediaContElem.offsetWidth / 2, y: event ? event.pageY : mediaContElem.offsetHeight / 2 };
@@ -647,6 +546,7 @@ function MediaContainer({
 		// If the tool is not in stick mode and an event is passed, update the clipper position to use the event data
 		if (!toolSettings.stick && event) {
 			clipperPos = {
+				// Calculate position as percentage of container dimensions
 				x: ((cursor.x - containerOffset.left) / mediaContElem.offsetWidth) * 100,
 				y: ((cursor.y - containerOffset.top) / mediaContElem.offsetHeight) * 100,
 			};
@@ -654,132 +554,66 @@ function MediaContainer({
 
 		setClipperPosition(clipperPos);
 
-		if (toolSettings.toolMode === 'divider') {
-			let position = clipperPos.x;
+		if (toolSettings.toolMode === 'divider' || toolSettings.toolMode === 'horizontalDivider') {
+			const dividerAxis = toolSettings.toolMode === 'divider' ? 'X' : 'Y';
+			const dividerOrtho = dividerAxis === 'X' ? 'Y' : 'X';
 
-			if (position <= 100 && leftMediaMetaData && rightMediaMetaData && mediaContElem.offsetWidth > 0) {
-				setClipperStyle({ width: position + '%' });
+			let position = dividerAxis === 'X' ? clipperPos.x : clipperPos.y;
+			const mediaContElemOffset = dividerAxis === 'X' ? mediaContElem.offsetWidth : mediaContElem.offsetHeight;
 
-				// Calculate clipper offset adjustment
-				// Clipper is at left:0 with width of position%
-				// Its center is at (position/2)% of container
-				// We want media to center at 50% of container
-				const clipperCenterPercent = position / 2;
-				const adjustment = (50 - clipperCenterPercent) / 100;
-				const clipperOffsetAdjustment = mediaContElem.offsetWidth * adjustment;
+			let clipperStyle = dividerAxis === 'X' ? { width: position + '%' } : { height: position + '%' };
 
-				// Calculate wrapper dimensions - different for images vs videos
-				const wrapperWidthPercent = toolSettings.zoomScale * (100 / position) * 100;
+			//* Clipper Style
+			if (leftMediaMetaData && rightMediaMetaData) setClipperStyle(clipperStyle);
 
-				// For images, calculate height based on aspect ratio
-				// For videos, use container height (VideoJS handles aspect ratio internally)
-				let leftWrapperStyle;
-				if (leftMediaType === 'image') {
-					// Use unified aspect ratio for consistent sizing
-					const baseWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-					const wrapperHeightPx = baseWidthPx * unifiedAspectRatio;
+			const clipperCenterPercent = position / 2;
+			const adjustment = (50 - clipperCenterPercent) / 100;
+			const clipperOffsetAdjustment = mediaContElemOffset * adjustment;
 
-					leftWrapperStyle = {
-						width: wrapperWidthPercent + '%',
-						minWidth: wrapperWidthPercent + '%',
-						height: wrapperHeightPx + 'px',
-						minHeight: wrapperHeightPx + 'px',
-						maxHeight: 'none',
-						maxWidth: 'none',
-						zIndex: 3,
-					};
-				} else {
-					// Videos: use unified aspect ratio
-					const baseWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-					const wrapperHeightPx = baseWidthPx * unifiedAspectRatio;
+			// Media: applies pan offset + clipper adjustment
+			let mediaWrapperStyle = {
+				left: '50%',
+				top: '50%',
+			};
 
-					leftWrapperStyle = {
-						width: wrapperWidthPercent + '%',
-						minWidth: wrapperWidthPercent + '%',
-						height: wrapperHeightPx + 'px',
-						minHeight: wrapperHeightPx + 'px',
-						maxHeight: 'none',
-						maxWidth: 'none',
-						zIndex: 3,
-					};
-				}
+			// Calculate media dimensions based on zoom and unified aspect ratio
+			// const mediaBaseWidth = mediaContElemOffset * toolSettings.zoomScale;
+			// const mediaBaseHeight = mediaBaseWidth * unifiedAspectRatio;
 
-				setClippedMediaWrapperStyle(leftWrapperStyle);
+			// Videos need wrapper height adjustment and explicit pixel dimensions
+			mediaWrapperStyle.width = unifiedMediaDimensions.width * toolSettings.zoomScale + 'px';
+			mediaWrapperStyle.height = unifiedMediaDimensions.height * toolSettings.zoomScale + 'px';
 
-				// Media: applies pan offset + clipper adjustment
-				// For videos, add Y-axis centering adjustment; images don't need it
-				const leftMediaStyle = {
-					left: '50%',
-					top: '50%',
-				};
+			const mediaMinorValue = currentOffset[dividerOrtho.toLowerCase()];
+			const mediaMajorValue = currentOffset[dividerAxis.toLowerCase()];
+			const clippedMediaMajorValue = clipperOffsetAdjustment + currentOffset[dividerAxis.toLowerCase()];
 
-				if (leftMediaType === 'video') {
-					// Use unified dimensions
-					const leftBaseWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-					const leftVideoHeightPx = leftBaseWidthPx * unifiedAspectRatio;
-					// Videos need wrapper height adjustment and explicit pixel dimensions
-					leftMediaStyle.width = leftBaseWidthPx + 'px';
-					leftMediaStyle.height = leftVideoHeightPx + 'px';
-					leftMediaStyle.transform = `translate(calc(-50% + ${clipperOffsetAdjustment + currentOffset.x}px), calc(-50% + ${currentOffset.y}px))`;
-				} else {
-					// Images don't need the wrapper height adjustment
-					leftMediaStyle.transform = `translate(calc(-50% + ${clipperOffsetAdjustment + currentOffset.x}px), calc(-50% + ${currentOffset.y}px))`;
-				}
+			let mediaTranslateMinor = `translate${dividerOrtho}(calc(-50% + ${mediaMinorValue}px))`;
+			let mediaTranslateMajor = `translate${dividerAxis}(calc(-50% + ${mediaMajorValue}px))`;
+			let clippedMediaTranslateMajor = `translate${dividerAxis}(calc(-50% + ${clippedMediaMajorValue}px))`;
 
-				setClippedMediaVideoStyle(leftMediaStyle);
+			mediaWrapperStyle = {
+				...mediaWrapperStyle,
+				transform: `${mediaTranslateMajor} ${mediaTranslateMinor}`,
+			};
 
-				// Right media wrapper dimensions - use unified aspect ratio
-				let rightWrapperStyle;
-				const rightWrapperWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-				const rightWrapperHeightPx = rightWrapperWidthPx * unifiedAspectRatio;
+			const clippedMediaWrapperStyle = {
+				...mediaWrapperStyle,
+				transform: `${clippedMediaTranslateMajor} ${mediaTranslateMinor}`,
+			};
 
-				if (rightMediaType === 'image') {
-					rightWrapperStyle = {
-						minWidth: `${100 * toolSettings.zoomScale}%`,
-						maxWidth: `${100 * toolSettings.zoomScale}%`,
-						width: `${100 * toolSettings.zoomScale}%`,
-						height: rightWrapperHeightPx + 'px',
-						minHeight: rightWrapperHeightPx + 'px',
-						maxHeight: 'none',
-					};
-				} else {
-					// Videos: use unified aspect ratio
-					rightWrapperStyle = {
-						minWidth: `${100 * toolSettings.zoomScale}%`,
-						maxWidth: `${100 * toolSettings.zoomScale}%`,
-						width: `${100 * toolSettings.zoomScale}%`,
-						height: rightWrapperHeightPx + 'px',
-						minHeight: rightWrapperHeightPx + 'px',
-						maxHeight: 'none',
-					};
-				}
+			//* Clipped Media Style
+			if (leftMediaMetaData) {
+				setClippedMediaWrapperStyle(clippedMediaWrapperStyle);
+			}
 
-				setUnClippedMediaWrapperStyle(rightWrapperStyle);
-
-				// Right media: applies pan offset
-				// For videos, also set explicit dimensions and add Y-axis centering adjustment
-				const rightMediaStyle = {
-					left: '50%',
-					top: '50%',
-				};
-
-				if (rightMediaType === 'video') {
-					// Use unified dimensions
-					const rightVideoWidthPx = mediaContElem.offsetWidth * toolSettings.zoomScale;
-					const rightVideoHeightPx = rightWrapperHeightPx;
-					// Videos need the wrapper height adjustment for proper centering and explicit pixel dimensions
-					rightMediaStyle.width = rightVideoWidthPx + 'px';
-					rightMediaStyle.height = rightVideoHeightPx + 'px';
-					rightMediaStyle.transform = `translate(calc(-50% + ${currentOffset.x}px), calc(-50% + ${currentOffset.y}px))`;
-				} else {
-					// Images don't need the wrapper height adjustment
-					rightMediaStyle.transform = `translate(calc(-50% + ${currentOffset.x}px), calc(-50% + ${currentOffset.y}px))`;
-				}
-
-				setUnClippedMediaVideoStyle(rightMediaStyle);
+			//* Unclipped Media Style
+			if (rightMediaMetaData) {
+				setUnClippedMediaWrapperStyle(mediaWrapperStyle);
 			}
 		}
 
+        //! Need to fix cutout positioning and scaling logic
 		if (toolSettings.toolMode === 'circleCutout' || toolSettings.toolMode === 'boxCutout') {
 			const circleSettings = {
 				radius: toolSettings.toolOptions.value[toolSettings.toolMode],
@@ -792,10 +626,6 @@ function MediaContainer({
 					left: `${clipperPos.x}%`,
 					top: `${clipperPos.y}%`,
 				});
-
-				// Set the clipper to flipped if it's on the right side of the screen
-				// This changes the side the lock icons shown up on
-				setClipperFlip(clipperPos.x > ((mediaContElem.offsetWidth - circleSettings.radius) / mediaContElem.offsetWidth) * 100);
 
 				const videoScale = {
 					x: (1 / ((circleSettings.radius * 2) / mediaContElem.offsetWidth)) * 100 * toolSettings.zoomScale,
@@ -849,7 +679,7 @@ function MediaContainer({
 					leftCircleMediaStyle.transform = `translate(calc(-50% + ${currentOffset.x + clipperOffsetX}px), calc(-50% + ${currentOffset.y + clipperOffsetY}px))`;
 				}
 
-				setClippedMediaVideoStyle(leftCircleMediaStyle);
+				setClippedMediaStyle(leftCircleMediaStyle);
 			}
 
 			// Right media wrapper: standard full size, centered in container
@@ -954,8 +784,8 @@ function MediaContainer({
 		let animatingFrame = false;
 
 		// Show frame anim & cancel if the zoom is out of bounds
-		if (zoomLevel > 6) {
-			zoomLevel = 6;
+		if (zoomLevel > toolSettings.zoomMax) {
+			zoomLevel = toolSettings.zoomMax;
 			if (!animatingFrame) {
 				mediaContainerElem.current.classList.add('zoom-out-anim');
 				animatingFrame = true;
@@ -965,8 +795,8 @@ function MediaContainer({
 				}, 500);
 			}
 		}
-		if (zoomLevel < 0.5) {
-			zoomLevel = 0.5;
+		if (zoomLevel < toolSettings.zoomMin) {
+			zoomLevel = toolSettings.zoomMin;
 			if (!animatingFrame) {
 				mediaContainerElem.current.classList.add('zoom-in-anim');
 				animatingFrame = true;
@@ -977,78 +807,20 @@ function MediaContainer({
 			}
 		}
 
-		// Calculate 1:1 pixel perfect ratio
-		const mediaWidth = rightMediaMetaData?.width;
-		const containerWidth = mediaContainerElem.current?.offsetWidth;
-		const pixelPerfectRatio = mediaWidth && containerWidth ? mediaWidth / containerWidth : null;
+        // If media dimensions are different, determine where 1:1 zoom lies based on unified dimensions
+        if (leftMediaMetaData && rightMediaMetaData && (leftMediaMetaData.width !== rightMediaMetaData.width || leftMediaMetaData.height !== rightMediaMetaData.height)) {
+            const leftWidthRatio = unifiedMediaDimensions.width / leftMediaMetaData.width;
+            const leftHeightRatio = unifiedMediaDimensions.height / leftMediaMetaData.height;
+            const leftAvgRatio = (leftWidthRatio + leftHeightRatio) / 2;
+            const rightWidthRatio = unifiedMediaDimensions.width / rightMediaMetaData.width;
+            const rightHeightRatio = unifiedMediaDimensions.height / rightMediaMetaData.height;
+            const rightAvgRatio = (rightWidthRatio + rightHeightRatio) / 2;
+            const avgRatio = (leftAvgRatio + rightAvgRatio) / 2;
+            const adjustedZoomLevel = zoomLevel * avgRatio;
+        }
 
-		if (!zoomSnap) {
-			// Snap to media width if zoom is close to media width
-			// For images, get the wrapper's width; for videos, get the element's width
-			const mediaElemWidth = rightMediaElem.current?.parentElement?.offsetWidth || rightMediaElem.current?.offsetWidth;
-			let snappedToPixelPerfect = false;
-
-			if (pixelPerfectRatio && mediaElemWidth) {
-				const pixelRatio = mediaElemWidth / mediaWidth;
-
-				// Check if already at pixel perfect (within tight tolerance)
-				if (pixelRatio < 1.02 && pixelRatio > 0.985) {
-					zoomLevel = pixelPerfectRatio;
-					setZoomSnap('pixel');
-					snappedToPixelPerfect = true;
-				} else {
-					// More aggressive threshold to skip over close increments
-					// Use 8% threshold to create a bigger "dead zone" around pixel perfect
-					const threshold = Math.max(0.08, pixelPerfectRatio * 0.07);
-					const distanceToPixelPerfect = Math.abs(zoomLevel - pixelPerfectRatio);
-
-					// If we're within the threshold zone
-					if (distanceToPixelPerfect < threshold) {
-						const wasBelow = newToolSettings.zoomScale < pixelPerfectRatio;
-						const isNowAbove = zoomLevel > pixelPerfectRatio;
-						const wasCrossingUp = wasBelow && isNowAbove;
-						const wasCrossingDown = !wasBelow && !isNowAbove;
-
-						// Snap to pixel perfect if crossing over it
-						if (wasCrossingUp || wasCrossingDown) {
-							zoomLevel = pixelPerfectRatio;
-							setZoomSnap('pixel');
-							snappedToPixelPerfect = true;
-						}
-					}
-				}
-			}
-
-			// Only check for snap to 1 or 2 if we didn't just snap to pixel perfect
-			if (!snappedToPixelPerfect) {
-				// Skip "snap to 1" (100% zoom) if:
-				// 1. Pixel perfect ratio is close to 1 (within 15%)
-				// 2. OR pixel perfect is in the snap to 1 range
-				// 3. OR we're approaching pixel perfect (within 0.1)
-				// 4. OR pixel perfect equals 1 (within tight tolerance of 0.02)
-				const pixelPerfectEquals1 = pixelPerfectRatio && Math.abs(pixelPerfectRatio - 1) < 0.02;
-				const pixelPerfectNear1 = pixelPerfectRatio && Math.abs(pixelPerfectRatio - 1) < 0.15;
-				const pixelPerfectInSnap1Range = pixelPerfectRatio && pixelPerfectRatio < 1.04 && pixelPerfectRatio > 0.96;
-				const approachingPixelPerfect = pixelPerfectRatio && Math.abs(zoomLevel - pixelPerfectRatio) < 0.1;
-
-				if (!pixelPerfectEquals1 && !pixelPerfectNear1 && !pixelPerfectInSnap1Range && !approachingPixelPerfect && zoomLevel < 1.04 && zoomLevel > 0.96) {
-					zoomLevel = 1;
-					setZoomSnap('1');
-				}
-
-				// Skip "snap to 2" (200% zoom) if pixel perfect ratio is close to 2 (within 15%)
-				const pixelPerfectNear2 = pixelPerfectRatio && Math.abs(pixelPerfectRatio - 2) < 0.15;
-				const pixelPerfectInSnap2Range = pixelPerfectRatio && pixelPerfectRatio < 2.04 && pixelPerfectRatio > 1.96;
-				const approachingPixelPerfect2 = pixelPerfectRatio && Math.abs(zoomLevel - pixelPerfectRatio) < 0.2;
-
-				if (!pixelPerfectNear2 && !pixelPerfectInSnap2Range && !approachingPixelPerfect2 && zoomLevel < 2.04 && zoomLevel > 1.96) {
-					zoomLevel = 2;
-					setZoomSnap('2');
-				}
-			}
-		} else {
-			setZoomSnap(null);
-		}
+        // Round to 2 decimal places
+        zoomLevel = Number(zoomLevel.toFixed(2));
 
 		newToolSettings.zoomScale = zoomLevel;
 
@@ -1299,7 +1071,13 @@ function MediaContainer({
 			id="mediaContainer"
 			ref={mediaContainerElem}
 			onMouseMove={handleMouseMove}
-			className={rightMedia ? '' : 'empty'}
+			className={[
+				leftMediaMetaData ? 'left-media-loaded' : '',
+				rightMediaMetaData ? 'right-media-loaded' : '',
+				!(leftMediaMetaData && rightMediaMetaData) ? 'media-metadata-loading' : 'empty',
+			]
+				.join(' ')
+				.trim()}
 			onClick={toggleClipperLock}
 			onMouseDown={handleMouseDown}
 			onWheel={handleScroll}>
@@ -1327,7 +1105,13 @@ function MediaContainer({
 					setContainerOverlayInfo={setContainerOverlayInfo}
 				/>
 			) : (
-				<MediaFileInput setMediaFile={setLeftMedia} mediaKey="leftMediaHandle" oppositeMediaMetaData={rightMediaMetaData} />
+				<MediaFileInput
+					setMediaFile={setLeftMedia}
+					mediaKey="leftMediaHandle"
+					oppositeMediaMetaData={rightMediaMetaData}
+					isInElectron={isInElectron}
+					isInBrowser={isInBrowser}
+				/>
 			)}
 			{rightMedia ? (
 				<>
@@ -1355,7 +1139,6 @@ function MediaContainer({
 							volume={toolSettings.playerAudio.right.volume}
 							playbackRate={toolSettings.playerSpeed}
 							style={unClippedMediaWrapperStyle}
-							videoStyle={unClippedMediaVideoStyle}
 						/>
 					) : (
 						<ImagePlayer
@@ -1364,12 +1147,17 @@ function MediaContainer({
 							onLoad={handleLoadedMetadata}
 							src={rightMedia || ''}
 							style={unClippedMediaWrapperStyle}
-							imageStyle={unClippedMediaVideoStyle}
 						/>
 					)}
 				</>
 			) : (
-				<MediaFileInput setMediaFile={setRightMedia} mediaKey="rightMediaHandle" oppositeMediaMetaData={leftMediaMetaData} />
+				<MediaFileInput
+					setMediaFile={setRightMedia}
+					mediaKey="rightMediaHandle"
+					oppositeMediaMetaData={leftMediaMetaData}
+					isInElectron={isInElectron}
+					isInBrowser={isInBrowser}
+				/>
 			)}
 			<div
 				id="videoClipper"
@@ -1377,14 +1165,14 @@ function MediaContainer({
 				style={clipperStyle}
 				className={`${toolSettings.toolMode}${leftMedia ? '' : ' empty'}${toolSettings.stick ? ' stuck' : ''}${
 					toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto ? ' auto' : ''
-				}${clipperFlip ? ' flipped' : ''}`}>
+				}`}>
+				<ClipperLock id="clipperLock" locked={toolSettings.stick} />
 				{leftMedia &&
 					(leftMediaType === 'video' ? (
 						<VideoJSPlayer
 							videoRef={leftMediaElem}
 							id="left-video"
 							style={clippedMediaWrapperStyle}
-							videoStyle={clippedMediaVideoStyle}
 							onLoadedMetadata={handleLoadedMetadata}
 							src={leftMedia || ''}
 							loop={toolSettings.playerLoop}
@@ -1400,7 +1188,6 @@ function MediaContainer({
 							onLoad={handleLoadedMetadata}
 							src={leftMedia || ''}
 							style={clippedMediaWrapperStyle}
-							imageStyle={clippedMediaVideoStyle}
 						/>
 					))}
 			</div>
@@ -1408,17 +1195,20 @@ function MediaContainer({
 				<PlayerSlider
 					defaultSliderValue={100}
 					id="zoomLevelSlider"
+					className={[
+						toolSettings.controllerBarOptions.floating ? 'floating-offset' : '',
+						leftMediaType === 'video' || rightMediaType === 'video' ? 'video-media' : 'image-media',
+					].join(' ')}
 					name="Zoom Level"
-					sliderMinMax={[50, 600]}
+					sliderMinMax={[toolSettings.zoomMin * 100, toolSettings.zoomMax * 100]}
 					value={toolSettings.zoomScale * 100}
 					stepValue={2}
 					direction="vertical"
-					onChange={value => handleMediaZoom(0.5 * Math.pow(12, (value - 50) / 550))}
+					onChange={value => handleMediaZoom((toolSettings.zoomMin * 100 * Math.pow(12, (value - 50) / ((toolSettings.zoomMax - toolSettings.zoomMin) * 100))) / 100)}
 					// valueFormatter={value => Math.round(0.5 * Math.pow(12, (value - 50) / 550) * 100)}
 					option={toolSettings.zoomScale}
 					label="%"
 					style={{
-						marginBottom: toolSettings.controllerBarOptions.floating ? '96px' : '0',
 						transitionDelay: toolSettings.controllerBarOptions.floating ? '0s' : '0.5s',
 					}}
 				/>

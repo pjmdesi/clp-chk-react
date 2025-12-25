@@ -1,7 +1,7 @@
 import { setupTitlebar, attachTitlebarToWindow } from 'custom-electron-titlebar/main';
 import Store from 'electron-store';
 
-const { app, session, protocol, BrowserWindow, Menu, ipcMain, shell, ipcRenderer, contextBridge } = require('electron');
+const { app, session, protocol, BrowserWindow, Menu, ipcMain, shell, ipcRenderer, contextBridge, screen } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -63,8 +63,10 @@ const createWindow = () => {
 		height: savedBounds?.height || defaultHeight,
 		x: savedBounds?.x,
 		y: savedBounds?.y,
-		minWidth: 900 + DEV * 600,
-		minHeight: 600 + DEV * 400,
+		// minWidth: 900 + DEV * 600,
+		// minHeight: 600 + DEV * 400,
+		minWidth: 900,
+		minHeight: 600,
 		titleBarStyle: DEV ? 'default' : 'hidden',
 		titleBarOverlay: !DEV,
 		transparent: !DEV,
@@ -104,13 +106,6 @@ const createWindow = () => {
 	// Save bounds when window is closed
 	mainWindow.on('close', saveBounds);
 
-	// const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
-
-	// DEV &&
-	// 	installExtension(REACT_DEVELOPER_TOOLS, { loadExtensionOptions: { allowFileAccess: true } })
-	// 		.then(name => console.log(`Added Extension:  ${name}`))
-	// 		.catch(err => console.error('An error occurred: ', err));
-
 	// and load the index.html of the app.
 	mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
@@ -122,15 +117,9 @@ const createWindow = () => {
 		}, 500);
 
 	if (DEV) {
-        mainWindow.webContents.once('did-finish-load', () => {
-            mainWindow.webContents.openDevTools();
-        });
-    }
-};
-
-const sizeWindowToFitVideo = () => {
-	if (mainWindow && mainWindow.webContents) {
-		mainWindow.webContents.send('size-window-to-fit-video');
+		mainWindow.webContents.once('did-finish-load', () => {
+			mainWindow.webContents.openDevTools();
+		});
 	}
 };
 
@@ -167,20 +156,93 @@ ipcMain.on('open-file', (event, filePath) => {
 	shell.showItemInFolder(filePath);
 });
 
-// Resize window to fit video dimensions
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+function resizeCenteredWithinCurrentDisplay(win, targetW, targetH, animate = true) {
+	if (!win || win.isDestroyed()) return;
+
+	const display = screen.getDisplayMatching(win.getBounds());
+	const wa = display.workArea; // { x, y, width, height }
+
+	// Measure frame overhead (outer - content)
+	const outer = win.getBounds();
+	const content = win.getContentBounds();
+
+	const frameW = Math.max(0, outer.width - content.width);
+	const frameH = Math.max(0, outer.height - content.height);
+
+	// Clamp content so OUTER fits within workArea
+	const maxContentW = Math.max(1, wa.width - frameW);
+	const maxContentH = Math.max(1, wa.height - frameH);
+
+	const clampedW = clamp(Math.round(targetW), 1, maxContentW);
+	const clampedH = clamp(Math.round(targetH), 1, maxContentH);
+
+	const newOuterW = clampedW + frameW;
+	const newOuterH = clampedH + frameH;
+
+	// Center the OUTER window in the work area
+	let newOuterX = Math.round(wa.x + (wa.width - newOuterW) / 2);
+	let newOuterY = Math.round(wa.y + (wa.height - newOuterH) / 2);
+
+	// Safety clamp (in case of rounding / odd WMs)
+	newOuterX = clamp(newOuterX, wa.x, wa.x + wa.width - newOuterW);
+	newOuterY = clamp(newOuterY, wa.y, wa.y + wa.height - newOuterH);
+
+	// Convert outer position -> content position using current offsets
+	const contentOffsetX = content.x - outer.x;
+	const contentOffsetY = content.y - outer.y;
+
+	win.setContentBounds(
+		{
+			x: newOuterX + contentOffsetX,
+			y: newOuterY + contentOffsetY,
+			width: clampedW,
+			height: clampedH,
+		},
+		animate
+	);
+
+	// Linux WMs sometimes "correct" geometry after a tick; re-center once if needed.
+	if (process.platform === 'linux') {
+		setTimeout(() => {
+			if (win.isDestroyed()) return;
+
+			const d2 = screen.getDisplayMatching(win.getBounds());
+			const wa2 = d2.workArea;
+
+			const o2 = win.getBounds();
+			const c2 = win.getContentBounds();
+
+			const frameW2 = Math.max(0, o2.width - c2.width);
+			const frameH2 = Math.max(0, o2.height - c2.height);
+
+			const maxCW2 = Math.max(1, wa2.width - frameW2);
+			const maxCH2 = Math.max(1, wa2.height - frameH2);
+
+			const w2 = clamp(c2.width, 1, maxCW2);
+			const h2 = clamp(c2.height, 1, maxCH2);
+
+			const newOW2 = w2 + frameW2;
+			const newOH2 = h2 + frameH2;
+
+			let x2 = Math.round(wa2.x + (wa2.width - newOW2) / 2);
+			let y2 = Math.round(wa2.y + (wa2.height - newOH2) / 2);
+
+			x2 = clamp(x2, wa2.x, wa2.x + wa2.width - newOW2);
+			y2 = clamp(y2, wa2.y, wa2.y + wa2.height - newOH2);
+
+			const offX2 = c2.x - o2.x;
+			const offY2 = c2.y - o2.y;
+
+			win.setContentBounds({ x: x2 + offX2, y: y2 + offY2, width: w2, height: h2 }, false);
+		}, 0);
+	}
+}
+
 ipcMain.on('resize-window', (event, { width, height }) => {
 	const allWindows = BrowserWindow.getAllWindows();
-	if (allWindows.length > 0) {
-		const mainWindow = allWindows[0];
-		mainWindow.setSize(Math.round(width), Math.round(height), true);
-	}
-});
+	if (allWindows.length === 0) return;
 
-// Trigger size-window-to-fit-video from renderer
-ipcMain.on('trigger-size-to-fit', () => {
-	const allWindows = BrowserWindow.getAllWindows();
-	if (allWindows.length > 0) {
-		const mainWindow = allWindows[0];
-		mainWindow.webContents.send('size-window-to-fit-video');
-	}
+	resizeCenteredWithinCurrentDisplay(allWindows[0], width, height, true);
 });
