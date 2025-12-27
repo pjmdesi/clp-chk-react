@@ -46,22 +46,22 @@ function MediaContainer({
 		[unifiedMediaDimensions, setUnifiedMediaDimensions] = React.useState({ width: 0, height: 0, aspectRatio: 1 }),
 		[containerOverlayInfo, setContainerOverlayInfo] = React.useState(''),
 		[toolModeBeforeMediaRemoval, setToolModeBeforeMediaRemoval] = React.useState('divider'),
+        [userInputDevice, setUserInputDevice] = React.useState('mouse'),
 		// [clippedMediaVideoStyle, setClippedMediaStyle] = React.useState(null),
 		// [unClippedMediaVideoStyle, setUnClippedMediaVideoStyle] = React.useState(null),
 		// [zoomSnap, setZoomSnap] = React.useState(null),
-		// continuousClipInterval = React.useRef(null),
+		continuousClipInterval = React.useRef(null),
+		displayOverlayInfoTimeout = React.useRef(null),
+		// Framerate detection refs
+		leftFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null }),
+		rightFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null }),
+		timeUpdateAnimationFrame = React.useRef(null),
+		previousZoomScale = React.useRef(toolSettings.zoomScale),
 		[validationWarnings, setValidationWarnings] = React.useState([]);
 
 	// Determine if media are images or videos
 	const leftMediaType = leftMediaMetaData?.mediaType || (leftMedia ? getFileMetadata(leftMedia)?.mediaType : null);
 	const rightMediaType = rightMediaMetaData?.mediaType || (rightMedia ? getFileMetadata(rightMedia)?.mediaType : null);
-
-	// Framerate detection refs
-	const leftFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null });
-	const rightFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null });
-	const timeUpdateAnimationFrame = React.useRef(null);
-
-	const previousZoomScale = React.useRef(toolSettings.zoomScale);
 
 	// Smooth playback position updates using requestAnimationFrame
 	React.useEffect(() => {
@@ -123,20 +123,19 @@ function MediaContainer({
 	//! BROKEN: auto divider clipper
 	// Switches between auto and manual mode for the divider tool
 	// Also reapply when media files are loaded to ensure clipper is styled correctly
-	// React.useEffect(() => {
-	// 	if (!leftMedia || !rightMedia) return;
+	React.useEffect(() => {
+		if (!leftMedia || !rightMedia) return;
 
-	// 	clearInterval(continuousClipInterval.current);
-	// 	if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) {
-	// 		clipMediaContinuous();
-	// 	} else {
-	// 		clearInterval(continuousClipInterval.current);
-	// 		clipMedia();
-	// 	}
-	// }, [toolSettings.toolMode, toolSettings.toolOptions, leftMedia, rightMedia]);
+		clearInterval(continuousClipInterval.current);
+		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) {
+			clipMediaContinuous();
+		} else {
+			clearInterval(continuousClipInterval.current);
+			clipMedia();
+		}
+	}, [toolSettings.toolMode, toolSettings.toolOptions, leftMedia, rightMedia]);
 
 	// Only after media files were previously loaded (don't override localStorage on initial mount)
-
 	const previousLeftMedia = React.useRef(leftMedia);
 	const previousRightMedia = React.useRef(rightMedia);
 
@@ -173,6 +172,88 @@ function MediaContainer({
 		previousRightMedia.current = rightMedia;
 	}, [leftMedia, rightMedia]);
 
+	// Validate media compatibility when both metadata sets are available
+	// Run clipMedia and recalculate unified dimensions when metadata loads
+	React.useEffect(() => {
+		if (!leftMediaMetaData || !rightMediaMetaData) {
+			setValidationWarnings([]);
+			return;
+		}
+
+		const warnings = [];
+
+		// Check 1: Mixed media types (video vs image)
+		if (leftMediaMetaData.mediaType !== rightMediaMetaData.mediaType) {
+			warnings.push({
+				type: 'mixedMediaTypes',
+				severity: 'error',
+				message: `Cannot compare ${leftMediaMetaData.mediaType} with ${rightMediaMetaData.mediaType}. Please select two files of the same type.`,
+			});
+		}
+
+		// Check 2: Different video durations
+		if (leftMediaMetaData.mediaType === 'video' && rightMediaMetaData.mediaType === 'video') {
+			const durationDiff = Math.abs(leftMediaMetaData.duration - rightMediaMetaData.duration);
+			if (durationDiff > 0.1) {
+				// More than 0.1 second difference
+				warnings.push({
+					type: 'differentDurations',
+					severity: 'warning',
+					message: `Videos have different durations: ${leftMediaMetaData.duration.toFixed(2)}s vs ${rightMediaMetaData.duration.toFixed(2)}s. The shorter video will display its last frame after it ends.`,
+				});
+			}
+
+			// Check 3: Different framerates
+			if (leftMediaMetaData.framerate && rightMediaMetaData.framerate) {
+				if (leftMediaMetaData.framerate !== rightMediaMetaData.framerate) {
+					const maxFramerate = Math.max(leftMediaMetaData.framerate, rightMediaMetaData.framerate);
+					warnings.push({
+						type: 'differentFramerates',
+						severity: 'info',
+						message: `Videos have different framerates: ${leftMediaMetaData.framerate}fps vs ${rightMediaMetaData.framerate}fps. Using ${maxFramerate}fps for playback controls.`,
+					});
+				}
+			}
+		}
+
+		// Check 4: Different dimensions
+		const dimensionsDiffer = leftMediaMetaData.width !== rightMediaMetaData.width || leftMediaMetaData.height !== rightMediaMetaData.height;
+		if (dimensionsDiffer) {
+			warnings.push({
+				type: 'differentDimensions',
+				severity: 'info',
+				message: `Media files have different dimensions: ${leftMediaMetaData.width}×${leftMediaMetaData.height} vs ${rightMediaMetaData.width}×${rightMediaMetaData.height}. Both will be scaled to match the larger dimensions.`,
+			});
+		}
+
+		setValidationWarnings(warnings);
+
+		let unifiedWidth = 0,
+			unifiedHeight = 0,
+			unifiedAspectRatio = 1;
+
+		if (leftMediaMetaData && rightMediaMetaData) {
+			// Use the larger dimensions to ensure both fit
+			unifiedWidth = Math.max(leftMediaMetaData.width, rightMediaMetaData.width);
+			unifiedHeight = Math.max(leftMediaMetaData.height, rightMediaMetaData.height);
+			unifiedAspectRatio = unifiedHeight / unifiedWidth;
+		} else if (leftMediaMetaData) {
+			unifiedWidth = leftMediaMetaData.width;
+			unifiedHeight = leftMediaMetaData.height;
+			unifiedAspectRatio = unifiedHeight / unifiedWidth;
+		} else if (rightMediaMetaData) {
+			unifiedWidth = rightMediaMetaData.width;
+			unifiedHeight = rightMediaMetaData.height;
+			unifiedAspectRatio = unifiedHeight / unifiedWidth;
+		}
+
+		setUnifiedMediaDimensions({ width: unifiedWidth, height: unifiedHeight, aspectRatio: unifiedAspectRatio });
+
+		if (leftMediaMetaData || rightMediaMetaData) {
+			clipMedia();
+		}
+	}, [leftMediaMetaData, rightMediaMetaData]);
+
 	// Updates the playback speed of the videos (images don't have playback speed)
 	React.useEffect(() => {
 		if (leftMediaType === 'video' || rightMediaType === 'video') {
@@ -208,35 +289,6 @@ function MediaContainer({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [toolSettings.zoomScale, mainContainerSize]);
 
-	// Run clipMedia and recalculate unified dimensions when metadata loads
-	React.useEffect(() => {
-
-        let unifiedWidth = 0,
-            unifiedHeight = 0,
-            unifiedAspectRatio = 1;
-
-        if (leftMediaMetaData && rightMediaMetaData) {
-            // Use the larger dimensions to ensure both fit
-            unifiedWidth = Math.max(leftMediaMetaData.width, rightMediaMetaData.width);
-            unifiedHeight = Math.max(leftMediaMetaData.height, rightMediaMetaData.height);
-            unifiedAspectRatio = unifiedHeight / unifiedWidth;
-        } else if (leftMediaMetaData) {
-            unifiedWidth = leftMediaMetaData.width;
-            unifiedHeight = leftMediaMetaData.height;
-            unifiedAspectRatio = unifiedHeight / unifiedWidth;
-        } else if (rightMediaMetaData) {
-            unifiedWidth = rightMediaMetaData.width;
-            unifiedHeight = rightMediaMetaData.height;
-            unifiedAspectRatio = unifiedHeight / unifiedWidth;
-        }
-
-        setUnifiedMediaDimensions({ width: unifiedWidth, height: unifiedHeight, aspectRatio: unifiedAspectRatio });
-
-		if (leftMediaMetaData || rightMediaMetaData) {
-			clipMedia();
-		}
-	}, [leftMediaMetaData, rightMediaMetaData]);
-
 	// Update saved tool mode and run clipMedia when user changes the tool
 	React.useEffect(() => {
 		if (leftMedia && rightMedia) {
@@ -249,7 +301,7 @@ function MediaContainer({
 	React.useEffect(() => {
 		let rightMediaElemWidth = 0;
 		let rightMediaElemHeight = 0;
-        const zoomLevel = toolSettings.zoomScale;
+		const zoomLevel = toolSettings.zoomScale;
 
 		if (rightMediaElem.current && rightMediaMetaData) {
 			// Calculate displayed dimensions based on media aspect ratio and zoom
@@ -265,24 +317,23 @@ function MediaContainer({
 			rightMediaElemHeight = rightMediaElemWidth * aspectRatio;
 		}
 
-        let zoomInfo = `<h3>Zoom: ${Math.round(toolSettings.zoomScale * 100)}%</h3>`;
+		let zoomInfo = `<h3>Zoom: ${Math.round(toolSettings.zoomScale * 100)}%</h3>`;
 
-        if (rightMediaMetaData && leftMediaMetaData) {
-            if (rightMediaMetaData.width === leftMediaMetaData.width) {
-                zoomInfo += `<h6>${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
-            } else if (rightMediaMetaData.height === unifiedMediaDimensions.height) {
-                zoomInfo += `<h6>L: ${Math.round((rightMediaElemWidth * leftMediaMetaData.width) / rightMediaMetaData.width) || 0}px <small>⨉</small> ${Math.round((rightMediaElemHeight * leftMediaMetaData.height) / rightMediaMetaData.height) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
-                zoomInfo += `<h6>R: ${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
-            } else if (leftMediaMetaData.height === unifiedMediaDimensions.height) {
-                zoomInfo += `<h6>L: ${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
-                zoomInfo += `<h6>R: ${Math.round((rightMediaElemWidth * rightMediaMetaData.width) / leftMediaMetaData.width) || 0}px <small>⨉</small> ${Math.round((rightMediaElemHeight * rightMediaMetaData.height) / leftMediaMetaData.height) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
-            }
-        } else {
-            zoomInfo += `<h6>${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
-        }
+		if (rightMediaMetaData && leftMediaMetaData) {
+			if (rightMediaMetaData.width === leftMediaMetaData.width) {
+				zoomInfo += `<h6>${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+			} else if (rightMediaMetaData.height === unifiedMediaDimensions.height) {
+				zoomInfo += `<h6>L: ${Math.round((rightMediaElemWidth * leftMediaMetaData.width) / rightMediaMetaData.width) || 0}px <small>⨉</small> ${Math.round((rightMediaElemHeight * leftMediaMetaData.height) / rightMediaMetaData.height) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+				zoomInfo += `<h6>R: ${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+			} else if (leftMediaMetaData.height === unifiedMediaDimensions.height) {
+				zoomInfo += `<h6>L: ${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+				zoomInfo += `<h6>R: ${Math.round((rightMediaElemWidth * rightMediaMetaData.width) / leftMediaMetaData.width) || 0}px <small>⨉</small> ${Math.round((rightMediaElemHeight * rightMediaMetaData.height) / leftMediaMetaData.height) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+			}
+		} else {
+			zoomInfo += `<h6>${Math.round(rightMediaElemWidth) || 0}px <small>⨉</small> ${Math.round(rightMediaElemHeight) || 0}px${zoomLevel === 1 ? ' [1:1]' : ''}</h6>`;
+		}
 
 		displayOverlayInfo(zoomInfo);
-
 	}, [toolSettings.zoomScale, rightMediaMetaData, leftMediaMetaData, unifiedMediaDimensions]);
 
 	// When the size of the cutout changes, re-clip the media
@@ -418,62 +469,6 @@ function MediaContainer({
 		}
 	};
 
-	// Validate media compatibility when both metadata sets are available
-	React.useEffect(() => {
-		if (!leftMediaMetaData || !rightMediaMetaData) {
-			setValidationWarnings([]);
-			return;
-		}
-
-		const warnings = [];
-
-		// Check 1: Mixed media types (video vs image)
-		if (leftMediaMetaData.mediaType !== rightMediaMetaData.mediaType) {
-			warnings.push({
-				type: 'mixedMediaTypes',
-				severity: 'error',
-				message: `Cannot compare ${leftMediaMetaData.mediaType} with ${rightMediaMetaData.mediaType}. Please select two files of the same type.`,
-			});
-		}
-
-		// Check 2: Different video durations
-		if (leftMediaMetaData.mediaType === 'video' && rightMediaMetaData.mediaType === 'video') {
-			const durationDiff = Math.abs(leftMediaMetaData.duration - rightMediaMetaData.duration);
-			if (durationDiff > 0.1) {
-				// More than 0.1 second difference
-				warnings.push({
-					type: 'differentDurations',
-					severity: 'warning',
-					message: `Videos have different durations: ${leftMediaMetaData.duration.toFixed(2)}s vs ${rightMediaMetaData.duration.toFixed(2)}s. The shorter video will display its last frame after it ends.`,
-				});
-			}
-
-			// Check 3: Different framerates
-			if (leftMediaMetaData.framerate && rightMediaMetaData.framerate) {
-				if (leftMediaMetaData.framerate !== rightMediaMetaData.framerate) {
-					const maxFramerate = Math.max(leftMediaMetaData.framerate, rightMediaMetaData.framerate);
-					warnings.push({
-						type: 'differentFramerates',
-						severity: 'info',
-						message: `Videos have different framerates: ${leftMediaMetaData.framerate}fps vs ${rightMediaMetaData.framerate}fps. Using ${maxFramerate}fps for playback controls.`,
-					});
-				}
-			}
-		}
-
-		// Check 4: Different dimensions
-		const dimensionsDiffer = leftMediaMetaData.width !== rightMediaMetaData.width || leftMediaMetaData.height !== rightMediaMetaData.height;
-		if (dimensionsDiffer) {
-			warnings.push({
-				type: 'differentDimensions',
-				severity: 'info',
-				message: `Media files have different dimensions: ${leftMediaMetaData.width}×${leftMediaMetaData.height} vs ${rightMediaMetaData.width}×${rightMediaMetaData.height}. Both will be scaled to match the larger dimensions.`,
-			});
-		}
-
-		setValidationWarnings(warnings);
-	}, [leftMediaMetaData, rightMediaMetaData]);
-
 	const handleTimeUpdate = e => {
 		// Don't update position while user is scrubbing the slider
 		if (playbackStatus.isScrubbing) return;
@@ -487,23 +482,6 @@ function MediaContainer({
 			if (rightMediaType === 'video') rightMediaElem.current.playbackRate = toolSettings.playerSpeed;
 		}
 	};
-
-	// const resetMediaClipper = () => {
-	// 	setClipperStyle({ width: '50%' });
-	// 	setClippedMediaWrapperStyle({ minWidth: '200%', zIndex: 3 });
-	// 	setClippedMediaStyle({ left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(1)' });
-	// 	setUnClippedMediaWrapperStyle({});
-	// 	setUnClippedMediaVideoStyle({ left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(1)' });
-	// 	setMediaOffset({ x: 0, y: 0 });
-
-	// 	// Reset zoom to 100%
-	// 	const newToolSettings = { ...toolSettings };
-	// 	newToolSettings.toolMode = 'divider';
-	// 	newToolSettings.zoomScale = 1;
-	// 	setToolSettings(newToolSettings);
-	// };
-
-	const displayOverlayInfoTimeout = React.useRef(null);
 
 	// Show overlay info element
 	// After a timeout, hide the overlay info element again
@@ -613,7 +591,7 @@ function MediaContainer({
 			}
 		}
 
-        //! Need to fix cutout positioning and scaling logic
+		//! Need to fix cutout positioning and scaling logic
 		if (toolSettings.toolMode === 'circleCutout' || toolSettings.toolMode === 'boxCutout') {
 			const circleSettings = {
 				radius: toolSettings.toolOptions.value[toolSettings.toolMode],
@@ -734,38 +712,65 @@ function MediaContainer({
 	};
 
 	//! BROKEN
-	// const clipMediaContinuous = () => {
-	// 	// Force turn off stick mode
-	// 	const newToolSettings = { ...toolSettings };
-	// 	newToolSettings.stick = false;
+	// Zoom does not work correctly while in continuous clip mode
+	const clipMediaContinuous = () => {
+		// Force turn off stick mode
+		const newToolSettings = { ...toolSettings };
+		newToolSettings.stick = false;
 
-	// 	setToolSettings(newToolSettings);
+		setToolSettings(newToolSettings);
 
-	// 	let position = toolSettings.toolOptions.type === 'rightToLeft' ? 100 : 0,
-	// 		positionDirection = 1,
-	// 		timingSegment = 10,
-	// 		mediaContElem = mediaContainerElem.current;
+		let position = toolSettings.toolOptions.type === 'rightToLeft' ? 100 : 0,
+			positionDirection = 1,
+			timingSegment = 10,
+			mediaContElem = mediaContainerElem.current;
 
-	// 	const positionDeltaScale = toolSettings.toolOptions.value.divider / 60;
+		const positionDeltaScale = toolSettings.toolOptions.value.divider / 60;
 
-	// 	continuousClipInterval.current = setInterval(() => {
-	// 		if (toolSettings.toolOptions.type === 'rightToLeft') {
-	// 			position <= 0 ? (position = 100) : (position += -1 * positionDeltaScale);
-	// 		} else if (toolSettings.toolOptions.type === 'leftToRight') {
-	// 			position >= 100 ? (position = 0) : (position += positionDeltaScale);
-	// 		} else {
-	// 			position >= 100 && (positionDirection = -1);
-	// 			position <= 0 && (positionDirection = 1);
-	// 			position += positionDirection * positionDeltaScale;
-	// 		}
+		continuousClipInterval.current = setInterval(() => {
+			if (toolSettings.toolOptions.type === 'rightToLeft') {
+				position <= 0 ? (position = 100) : (position += -1 * positionDeltaScale);
+			} else if (toolSettings.toolOptions.type === 'leftToRight') {
+				position >= 100 ? (position = 0) : (position += positionDeltaScale);
+			} else {
+				position >= 100 && (positionDirection = -1);
+				position <= 0 && (positionDirection = 1);
+				position += positionDirection * positionDeltaScale;
+			}
 
-	// 		clipMedia({ pageX: (position / 100) * mediaContElem.offsetWidth, pageY: 0 });
-	// 	}, timingSegment);
-	// };
+			clipMedia({ pageX: (position / 100) * mediaContElem.offsetWidth, pageY: 0 });
+		}, timingSegment);
+	};
+
+	const detectTrackPad = e => {
+		let isTrackpad = false;
+
+		// Use data about scroll event to determine input device
+		if (e.deltaY && e.deltaX) {
+			// If both deltaY and deltaX are present, it's likely a trackpad
+			isTrackpad = true;
+		} else if (e.deltaY) {
+			// If only deltaY is present, check the magnitude
+			if (Math.abs(e.deltaY) < 15) {
+				// Small deltaY values often indicate a trackpad
+				isTrackpad = true;
+			}
+		} else if (e.deltaX) {
+			// If only deltaX is present, check the magnitude
+			if (Math.abs(e.deltaX) < 15) {
+				// Small deltaX values often indicate a trackpad
+				isTrackpad = true;
+			}
+		}
+
+        setUserInputDevice(isTrackpad ? 'trackpad' : 'mouse');
+	};
 
 	const isDraggingRef = React.useRef(false);
 
 	const handleMouseMove = e => {
+        // Cancel if both media are not present
+        if (!leftMedia || !rightMedia) return;
 		// Cancel if currently dragging (middle mouse button)
 		if (isDraggingRef.current) return;
 		// Cancel if the tool is set to divider and auto mode is enabled
@@ -777,8 +782,9 @@ function MediaContainer({
 		clipMedia(e);
 	};
 
+	// Zoom handling based on scroll input from mouse wheel scroll or trackpad pinch
 	const handleMediaZoom = (zoomLevel = null) => {
-		if (!rightMedia || !leftMedia) return;
+		// if (!rightMedia || !leftMedia) return;
 		const newToolSettings = { ...toolSettings };
 
 		let animatingFrame = false;
@@ -807,29 +813,54 @@ function MediaContainer({
 			}
 		}
 
-        // If media dimensions are different, determine where 1:1 zoom lies based on unified dimensions
-        if (leftMediaMetaData && rightMediaMetaData && (leftMediaMetaData.width !== rightMediaMetaData.width || leftMediaMetaData.height !== rightMediaMetaData.height)) {
-            const leftWidthRatio = unifiedMediaDimensions.width / leftMediaMetaData.width;
-            const leftHeightRatio = unifiedMediaDimensions.height / leftMediaMetaData.height;
-            const leftAvgRatio = (leftWidthRatio + leftHeightRatio) / 2;
-            const rightWidthRatio = unifiedMediaDimensions.width / rightMediaMetaData.width;
-            const rightHeightRatio = unifiedMediaDimensions.height / rightMediaMetaData.height;
-            const rightAvgRatio = (rightWidthRatio + rightHeightRatio) / 2;
-            const avgRatio = (leftAvgRatio + rightAvgRatio) / 2;
-            const adjustedZoomLevel = zoomLevel * avgRatio;
-        }
+		// If media dimensions are different, determine where 1:1 zoom lies based on unified dimensions
+		if (leftMediaMetaData && rightMediaMetaData && (leftMediaMetaData.width !== rightMediaMetaData.width || leftMediaMetaData.height !== rightMediaMetaData.height)) {
+			const leftWidthRatio = unifiedMediaDimensions.width / leftMediaMetaData.width;
+			const leftHeightRatio = unifiedMediaDimensions.height / leftMediaMetaData.height;
+			const leftAvgRatio = (leftWidthRatio + leftHeightRatio) / 2;
+			const rightWidthRatio = unifiedMediaDimensions.width / rightMediaMetaData.width;
+			const rightHeightRatio = unifiedMediaDimensions.height / rightMediaMetaData.height;
+			const rightAvgRatio = (rightWidthRatio + rightHeightRatio) / 2;
+			const avgRatio = (leftAvgRatio + rightAvgRatio) / 2;
+			const adjustedZoomLevel = zoomLevel * avgRatio;
+		}
 
-        // Round to 2 decimal places
-        zoomLevel = Number(zoomLevel.toFixed(2));
+		// Round to 2 decimal places
+		zoomLevel = Number(zoomLevel.toFixed(2));
 
 		newToolSettings.zoomScale = zoomLevel;
 
 		setToolSettings(newToolSettings);
 	};
 
-	const handleScroll = e => {
-		if (!rightMedia || !leftMedia) return;
+	const trackpadZoom = e => {
+		// Zoom media based on scroll deltas
+		const zoomSpeed = 12; // Adjust this value to change zoom speed
+		let newZoom = toolSettings.zoomScale - (e.deltaY * zoomSpeed * toolSettings.zoomScale) / 2500;
 
+		newZoom = Number(Number(newZoom).toFixed(2));
+
+		handleMediaZoom(newZoom);
+	};
+
+    // Pan media based on trackpad scroll
+	const trackpadScroll = e => {
+		// Pan media based on scroll deltas
+		const panSpeed = 1; // Adjust this value to change panning speed
+		const newOffset = {
+			x: mediaOffset.x - e.deltaX * panSpeed,
+			y: mediaOffset.y - e.deltaY * panSpeed,
+		};
+
+		// Constrain offset to prevent excessive panning
+		const boundedOffset = getBoundedOffset(newOffset);
+
+		// Update state
+		setMediaOffset(boundedOffset);
+		clipMedia(null, newOffset);
+	};
+
+	const mouseScroll = e => {
 		// swap scroll directions if tool setting is enabled
 		if (toolSettings.swapScrollDirections) {
 			[e.deltaX, e.deltaY] = [e.deltaY, e.deltaX];
@@ -837,10 +868,9 @@ function MediaContainer({
 
 		// zoom videos if primary scroll
 		if (e.deltaY !== 0 && e.deltaX === 0) {
-			const newToolSettings = { ...toolSettings };
 			// Calculate the new zoom scale based on the scroll value
 			// To make it 'feel' like it's zooming in and out at an even rate, multiply the scroll value delta by the current zoom scale. i.e. the more zoomed in, the faster it zooms in and out
-			let newZoom = newToolSettings.zoomScale + (e.deltaY * newToolSettings.zoomScale) / 2500;
+			let newZoom = toolSettings.zoomScale + (e.deltaY * toolSettings.zoomScale) / 2500;
 
 			newZoom = Number(Number(newZoom).toFixed(2));
 
@@ -851,6 +881,25 @@ function MediaContainer({
 		}
 
 		clipMedia(e);
+	};
+
+    // Sends scroll events to appropriate handler based on input device parameters
+	const handleScroll = e => {
+		// if (!rightMedia || !leftMedia) return;
+
+        detectTrackPad(e);
+
+		if (userInputDevice === 'trackpad') {
+			let pinchZooming = e.ctrlKey || e.metaKey;
+
+			if (pinchZooming) {
+				trackpadZoom(e);
+			} else {
+				trackpadScroll(e);
+			}
+		} else {
+			mouseScroll(e);
+		}
 	};
 
 	const offsetStartRef = React.useRef({ x: 0, y: 0 });
@@ -1066,6 +1115,14 @@ function MediaContainer({
 		}
 	};
 
+	React.useEffect(() => {
+		mediaContainerElem.current.addEventListener('wheel', handleScroll, { passive: false });
+
+		return () => {
+			mediaContainerElem.current.removeEventListener('wheel', handleScroll);
+		};
+	});
+
 	return (
 		<div
 			id="mediaContainer"
@@ -1080,7 +1137,8 @@ function MediaContainer({
 				.trim()}
 			onClick={toggleClipperLock}
 			onMouseDown={handleMouseDown}
-			onWheel={handleScroll}>
+			// onWheel={handleScroll}
+		>
 			<InfoOverlay info={containerOverlayInfo} />
 			{validationWarnings.length > 0 && (
 				<div id="validationWarnings" className={`validation-warnings ${validationWarnings.some(w => w.severity === 'error') ? 'has-error' : ''}`}>
@@ -1141,13 +1199,7 @@ function MediaContainer({
 							style={unClippedMediaWrapperStyle}
 						/>
 					) : (
-						<ImagePlayer
-							imageRef={rightMediaElem}
-							id="right-image"
-							onLoad={handleLoadedMetadata}
-							src={rightMedia || ''}
-							style={unClippedMediaWrapperStyle}
-						/>
+						<ImagePlayer imageRef={rightMediaElem} id="right-image" onLoad={handleLoadedMetadata} src={rightMedia || ''} style={unClippedMediaWrapperStyle} />
 					)}
 				</>
 			) : (
@@ -1182,13 +1234,7 @@ function MediaContainer({
 							playbackRate={toolSettings.playerSpeed}
 						/>
 					) : (
-						<ImagePlayer
-							imageRef={leftMediaElem}
-							id="left-image"
-							onLoad={handleLoadedMetadata}
-							src={leftMedia || ''}
-							style={clippedMediaWrapperStyle}
-						/>
+						<ImagePlayer imageRef={leftMediaElem} id="left-image" onLoad={handleLoadedMetadata} src={leftMedia || ''} style={clippedMediaWrapperStyle} />
 					))}
 			</div>
 			{leftMedia && rightMedia && (

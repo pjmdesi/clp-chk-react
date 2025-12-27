@@ -46,36 +46,6 @@
 				pointer-events: auto;
 			}
 		}
-
-		&:after {
-			content: 'Please select 2 videos to compare.';
-			position: absolute;
-			display: flex;
-			bottom: 90%;
-			justify-content: center;
-			align-items: center;
-			background: rgba(0, 0, 0, 0.75);
-			backdrop-filter: blur(8px);
-			padding: 0.5rem 1rem;
-			border-radius: var(--radius);
-
-			left: 50%;
-			transform: translateX(-50%);
-
-			font-size: 2rem;
-			font-weight: 700;
-
-			opacity: 0;
-
-			transition:
-				opacity 0.25s ease-in-out 0s,
-				bottom 0.25s ease-in-out 0s;
-		}
-
-		&:hover:after {
-			opacity: 1;
-			bottom: 100%;
-		}
 	}
 
 	&.floating {

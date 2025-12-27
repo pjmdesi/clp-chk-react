@@ -35,9 +35,9 @@ let defaultToolSettings = {
 		position: 'bottom',
 	},
 	zoomScale: 1,
-    zoomMin: 0.25,
-    zoomMax: 6,
-    // Whether to invert the scroll zoom direction
+	zoomMin: 0.25,
+	zoomMax: 6,
+	// Whether to invert the scroll zoom direction
 	swapScrollDirections: false,
 	// Playback speed for the video
 	playerSpeed: 1,
@@ -68,7 +68,17 @@ let defaultToolSettings = {
 const isInElectron = !!(typeof window !== 'undefined' && window.api && window.api.openFile);
 const isInBrowser = !isInElectron;
 
-console.log(`Electron: ${isInElectron} | Browser: ${isInBrowser}`);
+const detectUserOS = (() => {
+	if (typeof navigator !== 'undefined') {
+		const platform = navigator.platform.toLowerCase();
+		if (platform.includes('win')) return 'windows';
+		if (platform.includes('mac')) return 'macos';
+		if (platform.includes('linux')) return 'linux';
+	}
+	return 'unknown';
+})();
+
+console.log(`Electron: ${isInElectron} | Browser: ${isInBrowser} | OS: ${detectUserOS}`);
 
 function MainContainer() {
 	const defaultPlaybackStatus = {
@@ -103,6 +113,7 @@ function MainContainer() {
 		[mainContainerSize, setMainContainerSize] = React.useState({ width: window.innerWidth, height: window.innerHeight }),
 		// [appSettings, setAppSettings] = React.useState(appSettingsMemory),
 		// [pendingFileHandles, setPendingFileHandles] = React.useState(null),
+		[userOS, setUserOS] = React.useState(detectUserOS),
 		[leftMediaMetaData, setLeftMediaMetaData] = React.useState(null),
 		[rightMediaMetaData, setRightMediaMetaData] = React.useState(null);
 
@@ -171,7 +182,6 @@ function MainContainer() {
 	// 		restoreFiles();
 	// 	}
 	// }, [isInBrowser]);
-
 
 	// Restore files from saved paths in Electron
 	React.useEffect(() => {
@@ -328,7 +338,7 @@ function MainContainer() {
 		},
 	};
 
-    // In Electron, save left file path (not blob URL) to localStorage
+	// In Electron, save left file path (not blob URL) to localStorage
 	React.useEffect(() => {
 		if (!isInBrowser && leftMedia) {
 			const metadata = getFileMetadata(leftMedia);
@@ -341,7 +351,7 @@ function MainContainer() {
 		}
 	}, [leftMedia, isInBrowser]);
 
-    // In Electron, save right file path (not blob URL) to localStorage
+	// In Electron, save right file path (not blob URL) to localStorage
 	React.useEffect(() => {
 		if (!isInBrowser && rightMedia) {
 			const metadata = getFileMetadata(rightMedia);
@@ -354,9 +364,11 @@ function MainContainer() {
 		}
 	}, [rightMedia, isInBrowser]);
 
-    // Save tool settings to localStorage when they change
+	// Save tool settings to localStorage when they change
 	React.useEffect(() => {
-		localStorage.setItem('toolSettings', JSON.stringify(toolSettings));
+        const sanitizedSettings = structuredClone(toolSettings);
+        sanitizedSettings.toolOptions.auto = false; // Do not persist 'auto' state
+		localStorage.setItem('toolSettings', JSON.stringify(sanitizedSettings));
 	}, [toolSettings]);
 
 	// When left or right media are removed, reset mediaMetaData
@@ -364,16 +376,20 @@ function MainContainer() {
 		if (!leftMedia) {
 			setLeftMediaMetaData(null);
 		}
-        if (!rightMedia) {
-            setRightMediaMetaData(null);
-        }
+		if (!rightMedia) {
+			setRightMediaMetaData(null);
+		}
 	}, [leftMedia, rightMedia]);
 
+    React.useEffect(() => {
+        setUserOS(detectUserOS);
+    });
+
 	return (
-		<div id="mainContainer" ref={mainContainerElem} className={[
-                isInBrowser ? 'browser-mode' : 'electron-mode',
-                toolSettings.controllerBarOptions.floating ? 'floating-tools' : '',
-            ].join(' ').trim()}>
+		<div
+			id="mainContainer"
+			ref={mainContainerElem}
+			className={[isInBrowser ? 'browser-mode' : 'electron-mode', toolSettings.controllerBarOptions.floating ? 'floating-tools' : ''].join(' ').trim()}>
 			{/* {pendingFileHandles && (
 				<div id='restoreFilesPanel'>
 					<button
@@ -401,6 +417,7 @@ function MainContainer() {
 				resetStoredSettings={resetStoredSettings}
 				isInElectron={isInElectron}
 				isInBrowser={isInBrowser}
+				userOS={userOS}
 			/>
 			<ControllerBar
 				toolSettings={toolSettings}

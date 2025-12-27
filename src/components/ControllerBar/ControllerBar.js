@@ -297,7 +297,7 @@ function ControllerBar({
 				<PlayerControl id="swapMediasButton" iconName="GitCompareArrows" title="Swap videos" onClick={() => swapMedias()} />
 				<PlayerRadioButtons id="toolModeButtonSet" buttonSet={toolModeSet} value={toolSettings.toolMode} />
 				<div className="control-subgroup">
-					{/* !BROKEN - adjustments for auto sweeper
+					{/* !BROKEN - adjustments for auto sweeper */}
                         {toolSettings.toolMode === 'divider' && (
 						<PlayerToggle
 							id="autoDividerButton"
@@ -323,7 +323,7 @@ function ControllerBar({
 								label="/ min"
 							/>
 						</>
-					)} */}
+					)}
 					{['boxCutout', 'circleCutout'].includes(toolSettings.toolMode) && (
 						<PlayerSlider
 							defaultSliderValue={200}

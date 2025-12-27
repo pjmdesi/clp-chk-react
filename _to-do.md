@@ -13,6 +13,30 @@
   * same with resizing window
 * Minimum window size for Electron app doesn't quite match that of the internal web app container minimum size
 
+#### MacOS Specific
+* Rounded corners do not match default macOS window corners. Either need to override default window corner radius or find the correct value to match.
+  * Border radius seems to change based on focus state of window
+* Title bar buttons (close, minimize, maximize) are misaligned vertically
+* Green maximize button does not seem to work correctly.
+* File menu does not show
+  * App name
+    * Quit
+    * Settings...
+  * File
+    * Load Left Video...
+    * Load Right Video...
+    * Swap Videos
+  * Edit
+    * Tools
+      * Vertical Clipper
+      * Horizontal Clipper
+      * Circle Cutout
+      * Rectangle Cutout
+    * Reset Zoom
+  * View
+  * Window
+  * Help
+
 ### Features (UI)
 
 * Add a vertical divider clipper mode
