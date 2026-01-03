@@ -1,0 +1,9 @@
+// Centralized defaults for app-wide settings (not tool-specific).
+
+const defaultAppSettings = {
+	// Zoom bounds apply across the app.
+	zoomMin: 0.25,
+	zoomMax: 6,
+};
+
+export default defaultAppSettings;

@@ -2,6 +2,13 @@
 
 (_Items are kind of in priority order for each section_)
 
+
+DO THIS NEXT:
+
+* Fit to window and fill window snap points need to be labelled in the zoom info overlay (also make sure all naming for that overlay is updated to indicate it's only for zooming)
+* Add snap points to zoom slider
+* Create media that has different sizes to test functionality
+
 ## UI
 
 ### Bugs / Issues (UI)
@@ -32,23 +39,18 @@
       * Horizontal Clipper
       * Circle Cutout
       * Rectangle Cutout
-    * Reset Zoom
+    * Reset View
   * View
   * Window
   * Help
 
 ### Features (UI)
 
-* Add a vertical divider clipper mode
 * Add slider to control volume for each vid (maybe scroll on volume button fills in button outline?)
 * Add warning when videos are not the same ratio / length
 * (?) If videos are different lengths:
   * Allow timeline track to indicate where the shorter one ends
   * Allow user to pick whether black or last frame is shown
-* Modals
-  * Create modal template
-  * Hook up modal buttons
-  * Create Settings Menu using modals
 * Add settings panel
   * Allow swapping vertical scroll and horizontal scroll functions (vertical scroll = zoom | horizontal scroll = scrub <-> vertical scroll = scrub | horizontal scroll = zoom) [ use event listener: _**onwheel**_ and use x & y coordinates to distinguish between the 2 ]
   * Invert zoom direction
@@ -88,10 +90,6 @@
 
 ### Bugs / Issues (app)
 
-* Add memory to recall on next app launch:
-  * ~~Videos from last session~~ (5/14/24)
-    * This was working, but is now broken again, using a button to restore files
-  * Selected tool & settings used from last session
 * File compatibility issues | I need to add a check for several issues the user might run into while using this app. Here's a list of things I've thought of so far:
     1. They might choose video files of different lengths. If they do, I need to display an warning that says this, but the app should still work. The timecode slider should proceed past the shorter video file (displaying the last frame) until it reaches the end of the longer video.
     2. along the same lines, if the video files have different framrates, the timecode slider should display that of the larger framerate.
@@ -112,7 +110,11 @@
 
 ### Complete
 
-
+* ~~Modals~~ (1/2/25)
+  * ~~Create modal template~~ (1/2/25)
+  * ~~Hook up modal buttons~~ (1/2/25)
+  * ~~Create Settings Menu using modals~~ (1/2/25)
+* ~~Add a vertical divider clipper mode~~ (12/26/25)
 * ~~Auto resize button isn't quite correct, need to adjust to fit perfectly in both dimensions~~ (12/22/25)
   * ~~Need to account for if video is larger than user's screen resolution~~ (12/22/25)
   * ~~Adjust button icon to indicate if current size is larger or smaller than video's native size~~ (12/22/25)

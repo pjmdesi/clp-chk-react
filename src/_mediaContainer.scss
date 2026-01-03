@@ -1,5 +1,14 @@
 #mediaContainer {
-	--controller-offset: 72px;
+	--controller-offset: 40px;
+
+
+    &:has(+#controllerBar.videos) {
+        --controller-offset: 72px;
+    }
+
+    #mainContainer.floating-tools > & {
+        --controller-offset: 0px;
+    }
 
 	cursor: pointer;
 
@@ -17,9 +26,10 @@
 	box-shadow: 0 1px 6px 0px rgba($color: var(--black-rgb), $alpha: 0.8);
 
 	transition:
-		transform 0.2s ease-in-out,
-		box-shadow 0.2s ease-in-out,
-		border-radius 0.2s ease-in-out;
+        height var(--default-timing) ease-in-out,
+		transform var(--default-timing) ease-in-out,
+		box-shadow var(--default-timing) ease-in-out,
+		border-radius var(--default-timing) ease-in-out;
 
 	--static-dark: var(--gray5);
 	--static-light: var(--gray7);
@@ -51,57 +61,7 @@
 
 		&:not(:has(*)) {
 			opacity: 0;
-			transition: opacity 0.5s ease-in-out;
-		}
-	}
-
-	#validationWarnings {
-		position: absolute;
-		top: 16px;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 5;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		max-width: 600px;
-		pointer-events: none;
-
-		.validation-warning {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			padding: 8px 16px;
-			border-radius: 6px;
-			background-color: rgba(0, 0, 0, 0.85);
-			backdrop-filter: blur(8px);
-			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-			font-size: 0.9rem;
-			line-height: 1.4;
-			pointer-events: auto;
-
-			&.error {
-				border-left: 3px solid var(--red);
-				color: #ff6b6b;
-			}
-
-			&.warning {
-				border-left: 3px solid var(--yellow);
-				color: #ffd93d;
-			}
-
-			&.info {
-				border-left: 3px solid var(--blue);
-				color: #6bcfff;
-			}
-
-			svg {
-				flex-shrink: 0;
-			}
-
-			span {
-				flex: 1;
-			}
+			transition: opacity var(--default-timing) ease-in-out;
 		}
 	}
 
@@ -111,11 +71,11 @@
 	}
 
 	&:has(#videoClipper.divider:not(.stuck)) {
-		cursor: col-resize;
+		cursor: ew-resize;
 	}
 
 	&:has(#videoClipper.horizontalDivider:not(.stuck)) {
-		cursor: row-resize;
+		cursor: ns-resize;
 	}
 
 	&.zoom-out-anim {
@@ -226,14 +186,14 @@
 			box-shadow: 2px 0 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
 		}
 
-        &.horizontalDivider {
-            box-shadow: 0 2px 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
+		&.horizontalDivider {
+			box-shadow: 0 2px 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
 
-            #clipperLock {
-                inset: auto auto var(--spacing) 50%;
-                transform: translateX(50%);
-            }
-        }
+			#clipperLock {
+				inset: auto auto var(--spacing) 50%;
+				transform: translateX(50%);
+			}
+		}
 
 		&.divider,
 		&.horizontalDivider {
@@ -253,8 +213,8 @@
 			box-shadow: 0 0 0 calc(var(--user-divider-thickness) + 0.75px) var(--user-divider-color);
 
 			transition:
-				border-radius 0.25s ease-in-out,
-				box-shadow 0.25s ease-in-out;
+				border-radius var(--default-timing) ease-in-out,
+				box-shadow var(--default-timing) ease-in-out;
 		}
 
 		&.circleCutout {
@@ -286,10 +246,10 @@
 	// Images inside wrappers shouldn't have hardcoded positioning - let the wrapper handle it
 	video {
 		position: absolute !important;
-        left: 0 !important;
-        top: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
+		left: 0 !important;
+		top: 0 !important;
+		width: 100% !important;
+		height: 100% !important;
 		display: block;
 		object-fit: contain;
 		background: var(--black);
@@ -336,6 +296,75 @@
 		.vjs-error-display,
 		.vjs-modal-dialog {
 			display: none !important;
+		}
+	}
+}
+
+#validationMessage {
+	position: absolute;
+	inset: 1rem 1rem auto auto;
+
+	display: flex;
+	flex-direction: column;
+	gap: calc(4 * var(--spacing));
+	padding: var(--root-padding);
+
+	color: var(--message-color);
+	font-size: 1rem;
+	font-weight: 500;
+	background-color: var(--dark-blue);
+	border-radius: calc(var(--radius) + var(--spacing));
+
+	box-shadow:
+		0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
+		0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+
+	backdrop-filter: blur(var(--controller-spacing));
+
+	height: auto;
+	max-width: calc(50% - 2rem);
+
+	#mainContainer.floating-tools & {
+		background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+		opacity: 0;
+	}
+
+	#mainContainer:hover &,
+	#mainContainer:focus-within & {
+		opacity: 1;
+		transition:
+			opacity var(--default-timing) linear 0s,
+			inset var(--default-timing) ease-in-out 0s,
+			padding var(--default-timing) ease-in-out 0s,
+			var(--default-timing) ease-in-out 0s,
+			border-radius var(--default-timing) ease-in-out 0s;
+	}
+
+	.validation-warning {
+		--message-color: var(--white);
+
+		display: flex;
+		gap: calc(4 * var(--spacing));
+		align-items: center;
+
+		&.error {
+			--message-color: var(--pink);
+		}
+
+		&.warning {
+			--message-color: var(--caution);
+		}
+
+		&.info {
+			--message-color: var(--info);
+		}
+
+		svg {
+			flex-shrink: 0;
+		}
+
+		span {
+			flex: 1;
 		}
 	}
 }

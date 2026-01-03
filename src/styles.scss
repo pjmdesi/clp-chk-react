@@ -5,7 +5,9 @@
 @use '_variables' as *;
 @use '_colors';
 
+@use '_modals';
 @use '_sliders';
+@use '_inputs';
 @use '_mediaContainer';
 @use '_controllerBar';
 @use '_mediaInfoBar';
@@ -82,8 +84,8 @@ body:has(#mainContainer.electron-mode) {
 }
 
 #mainContainer {
-	display: flex;
-	flex-direction: column;
+	// display: flex;
+	// flex-direction: column;
 	position: relative;
 	width: 100%;
 	height: 100%;
@@ -107,7 +109,7 @@ body:has(#mainContainer.electron-mode) {
 		z-index: 10;
 	}
 
-    &.floating-tools {
-        --floating-tools-spacing: 16px;
-    }
+	&.floating-tools {
+		--floating-tools-spacing: 16px;
+	}
 }

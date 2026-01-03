@@ -3,14 +3,18 @@ import React from 'react';
 import PlayerControl from '../PlayerControl';
 import PlayerSlider from '../PlayerSlider';
 import PlayerRadioButtons from '../PlayerRadioButtons';
-import ModalButton from '../ModalButton';
 import PlayerToggle from '../PlayerToggle/PlayerToggle';
 import Icon from '../Icon';
+import UserSettingsControl from '../UserSettingsControl';
 import { secondsToTimecode } from '../../utils/timecode';
 
 function ControllerBar({
 	toolSettings,
 	setToolSettings,
+	appSettings,
+	setAppSettings,
+	toolSettingsRef,
+	appSettingsRef,
 	playbackStatus,
 	leftMedia,
 	rightMedia,
@@ -21,8 +25,10 @@ function ControllerBar({
 	rightMediaMetaData,
 	viewportSize,
 	isInElectron,
+	setCurrentModal,
 }) {
 	const [hasAnyVideo, setHasAnyVideo] = React.useState(false);
+    const [hasBothMedia, setHasBothMedia] = React.useState(!!leftMedia && !!rightMedia);
 	const [windowIsSmallerThanMedia, setWindowIsSmallerThanMedia] = React.useState(null);
 
 	const updateToolSettings = (newSettingVal, setting) => {
@@ -257,13 +263,14 @@ function ControllerBar({
 
 	React.useEffect(() => {
 		setHasAnyVideo(leftMediaType === 'video' || rightMediaType === 'video');
+        setHasBothMedia(!!leftMediaMetaData && !!rightMediaMetaData);
 		mediaVsContainerSizeCheck();
 	}, [viewportSize, leftMediaMetaData, rightMediaMetaData, toolSettings.controllerBarOptions.floating]);
 
 	return (
 		<div
 			id="controllerBar"
-			className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${!leftMedia || !rightMedia ? ' disabled' : ''}${hasAnyVideo ? ' videos' : ''}`}>
+			className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${hasAnyVideo ? ' videos' : ''}`}>
 			{hasAnyVideo && (
 				<PlayerSlider
 					id="videoProgressSlider"
@@ -293,12 +300,12 @@ function ControllerBar({
 					valueFormatter={seconds => secondsToTimecode(seconds, framerate)}
 				/>
 			)}
-			<div className="control-group">
+			<div className={`control-group ${hasBothMedia ? '' : 'disabled'}`}>
 				<PlayerControl id="swapMediasButton" iconName="GitCompareArrows" title="Swap videos" onClick={() => swapMedias()} />
 				<PlayerRadioButtons id="toolModeButtonSet" buttonSet={toolModeSet} value={toolSettings.toolMode} />
 				<div className="control-subgroup">
 					{/* !BROKEN - adjustments for auto sweeper */}
-                        {toolSettings.toolMode === 'divider' && (
+                        {(toolSettings.toolMode === 'divider' || toolSettings.toolMode === 'horizontalDivider') && (
 						<PlayerToggle
 							id="autoDividerButton"
 							name="Move Divider Automatically"
@@ -315,9 +322,9 @@ function ControllerBar({
                                 defaultSliderValue={24}
 								id="transitionSpeedSlider"
 								name="Transition Speed"
-								sliderMinMax={[0.5, 120]}
+								sliderMinMax={[10, 200]}
 								value={toolSettings.toolOptions.value[toolSettings.toolMode]}
-								stepValue={0.5}
+								stepValue={1}
 								onChange={updateToolSettingOptionsValue}
 								option={toolSettings.toolMode}
 								label="/ min"
@@ -381,7 +388,28 @@ function ControllerBar({
 						<Icon name={windowIsSmallerThanMedia ? 'Maximize2' : 'Minimize2'} />
 					</button>
 				)}
-				<button id="settingsModalButton" title="Open Settings" onClick={() => console.log('Open Settings Modal')}>
+				<button
+					id="settingsModalButton"
+					title="Open Settings"
+					onClick={() => {
+						if (!setCurrentModal) {
+							return;
+						}
+
+						setCurrentModal({
+							key: 'settings',
+							title: 'Settings',
+							component: UserSettingsControl,
+							props: {
+								toolSettings,
+								setToolSettings,
+								appSettings,
+								setAppSettings,
+								toolSettingsRef,
+								appSettingsRef,
+							},
+						});
+					}}>
 					<Icon name="Settings" />
 				</button>
 			</div>

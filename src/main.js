@@ -10,6 +10,12 @@ const fs = require('node:fs');
 // In development, it will be false
 const DEV = !app.isPackaged;
 
+const isMac = process.platform === 'darwin';
+
+// Keep a global reference of the window object, if you don't, the window will
+// be closed automatically when the JavaScript object is garbage collected.
+let mainWindow;
+
 // Initialize electron-store for persistent data (will be initialized after app ready)
 let store;
 
@@ -19,7 +25,140 @@ if (require('electron-squirrel-startup')) {
 }
 
 // Blank menu
-const menuTemplate = [];
+const menuTemplate = [
+	// { role: 'appMenu' }
+	// ...(isMac
+	// 	? [
+	// 			{
+	// 				label: app.name,
+	// 				submenu: [{ label: 'Settings...' }, { type: 'separator' }, { role: 'quit' }],
+	// 			},
+	// 		]
+	// 	: []),
+	// // { role: 'fileMenu' }
+	// {
+	// 	label: 'File',
+	// 	submenu: [
+	// 		isMac ? { role: 'close' } : { role: 'quit' },
+	// 		{
+	// 			role: 'submenu',
+	// 			label: 'Left Video',
+	// 			submenu: [
+	// 				{
+	// 					label: 'Load new file...',
+	// 					click: async () => {
+	// 						mainWindow.webContents.send('load-left-video');
+	// 					},
+	// 				},
+	// 				{
+	// 					label: 'Clear file',
+	// 					click: async () => {
+	// 						mainWindow.webContents.send('clear-left-video');
+	// 					},
+	// 				},
+	// 			],
+	// 		},
+	// 		{
+	// 			role: 'submenu',
+	// 			label: 'Right Video',
+	// 			submenu: [
+	// 				{
+	// 					label: 'Load new file...',
+	// 					click: async () => {
+	// 						mainWindow.webContents.send('load-right-video');
+	// 					},
+	// 				},
+	// 				{
+	// 					label: 'Clear file',
+	// 					click: async () => {
+	// 						mainWindow.webContents.send('clear-right-video');
+	// 					},
+	// 				},
+	// 			],
+	// 		},
+	// 		{
+	// 			label: 'Swap Videos',
+	// 			click: async () => {
+	// 				mainWindow.webContents.send('swap-videos');
+	// 			},
+	// 		},
+	// 	],
+	// },
+	// // { role: 'editMenu' }
+	// {
+	// 	label: 'Clipper',
+	// 	submenu: [
+	// 		{
+	// 			role: 'submenu',
+	// 			label: 'Clip Type',
+	// 			submenu: [
+	// 				{
+	// 					label: 'Vertical Clipper',
+	// 					click: async () => {
+	// 						mainWindow.webContents.send('set-clip-type', 'vertical');
+	// 					},
+	// 				},
+	// 				{
+	// 					label: 'Horizontal Clipper',
+	// 					click: async () => {
+	// 						mainWindow.webContents.send('set-clip-type', 'horizontal');
+	// 					},
+	// 				},
+	// 				{
+	// 					label: 'Circle Cutout',
+	// 					click: async () => {
+	// 						mainWindow.webContents.send('set-clip-type', 'circle');
+	// 					},
+	// 				},
+	// 				{
+	// 					label: 'Rectangle Cutout',
+	// 					click: async () => {
+	// 						mainWindow.webContents.send('set-clip-type', 'rectangle');
+	// 					},
+	// 				},
+	// 			],
+	// 		},
+	// 		{ role: 'separator' },
+	// 		{
+	// 			label: 'Reset View',
+	// 			click: async () => {
+	// 				mainWindow.webContents.send('reset-view');
+	// 			},
+	// 		},
+	// 	],
+	// },
+	// // { role: 'viewMenu' }
+	// {
+	// 	label: 'View',
+	// 	submenu: [
+	// 		{ role: 'reload' },
+	// 		{ role: 'forceReload' },
+	// 		{ type: 'separator' },
+	// 		{ role: 'resetZoom', label: 'Reset App UI Zoom' },
+	// 		{ role: 'zoomIn', label: 'Zoom In App UI' },
+	// 		{ role: 'zoomOut', label: 'Zoom Out App UI' },
+	// 		{ type: 'separator' },
+	// 		{ role: 'togglefullscreen' },
+	// 	],
+	// },
+	// // { role: 'windowMenu' }
+	// {
+	// 	label: 'Window',
+	// 	submenu: [{ role: 'minimize' }, { role: 'zoom' }, ...(isMac ? [{ type: 'separator' }, { role: 'front' }, { type: 'separator' }, { role: 'window' }] : [{ role: 'close' }])],
+	// },
+	// {
+	// 	role: 'help',
+	// 	submenu: [
+	// 		{
+	// 			label: 'Visit the GitHub Repository...',
+	// 			click: async () => {
+	// 				const { shell } = require('electron');
+	// 				await shell.openExternal('https://github.com/your-repo-url');
+	// 			},
+	// 		},
+	// 	],
+	// },
+];
 
 const applicationMenu = Menu.buildFromTemplate(menuTemplate);
 Menu.setApplicationMenu(applicationMenu);
@@ -57,7 +196,7 @@ const createWindow = () => {
 	const defaultWidth = 1000 + DEV * 600;
 	const defaultHeight = 600 + DEV * 400;
 
-	const mainWindow = new BrowserWindow({
+	mainWindow = new BrowserWindow({
 		// Leave room for devtools when in development
 		width: savedBounds?.width || defaultWidth,
 		height: savedBounds?.height || defaultHeight,

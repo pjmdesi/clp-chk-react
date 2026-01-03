@@ -1,0 +1,185 @@
+@use '_variables' as *;
+@use '_colors' as *;
+
+.input-group {
+	display: flex;
+	flex-direction: column;
+	gap: calc(4 * var(--spacing));
+	padding: var(--root-padding);
+	background-color: var(--dark-blue);
+	border-radius: var(--radius);
+
+	box-shadow: $bevel-shadow-sink-in;
+
+	&.user-settings-control {
+		flex: 1 0 auto;
+	}
+}
+
+.control-group-spacer {
+	flex: 1 0 auto;
+}
+
+.control-section {
+	display: flex;
+	flex-direction: column;
+	gap: calc(2 * var(--spacing));
+}
+
+.control-group {
+	display: flex;
+	align-items: center;
+	gap: calc(2 * var(--spacing));
+
+	.control-subgroup {
+		display: flex;
+		flex: 1 0 auto;
+		align-items: center;
+		gap: 4px;
+
+		--btnSize: 20px;
+	}
+
+	label:has(input[type='checkbox']),
+	label:has(input[type='radio']) {
+		--font-size: 12px;
+
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		user-select: none;
+
+		font-size: var(--font-size);
+
+		height: var(--btnSize);
+		padding: var(--spacing);
+	}
+
+	.control-checkbox-container,
+	.control-radio-group {
+		display: flex;
+		gap: var(--spacing);
+		padding: var(--spacing);
+		justify-content: center;
+		background-color: var(--dark-blue);
+		border-radius: var(--radius);
+
+		box-shadow: $bevel-shadow-sink-in;
+	}
+
+	.control-checkbox-container {
+		label:has(input[type='checkbox']) {
+			border-radius: calc(var(--radius) - var(--spacing));
+
+			&:has(input[type='checkbox']:checked) {
+				box-shadow: $bevel-shadow-pop-out;
+				background: var(--pink);
+			}
+
+			> .lucide {
+				aspect-ratio: 1;
+				width: calc(var(--btnSize) - 2 * var(--spacing));
+				height: calc(var(--btnSize) - 2 * var(--spacing));
+			}
+		}
+	}
+
+	.control-radio-group {
+		--radius: 16px;
+		align-items: center;
+
+		&.auto-fold {
+			--width: var(--btnSize);
+			--radio-offset: 0;
+
+			width: calc(var(--width) + 2 * var(--spacing));
+			max-width: calc(var(--btnSize) + 2 * var(--spacing));
+			overflow: hidden;
+
+			transition:
+				width 0.2s ease-in-out,
+				max-width 0.2s ease-in-out;
+
+			@for $i from 2 through 8 {
+				&:has(label:nth-child(#{$i})) {
+					// change hover width to the width of the button group plus the spacing between buttons and the spacing on the sides of the container ($i + 1)
+					--hover-width: calc(#{$i} * var(--btnSize) + ((#{$i + 1}) * var(--spacing)));
+
+					@for $j from 1 through $i {
+						&:has(label:nth-child(#{$j}) > input[type='radio']:checked) {
+							// calculate the left offset of the checked radio button to position the checked button in the center of the container when it is folded
+							$positionCalc: #{$i - 2 * $j + 1} / 2;
+							$leftOffset: calc($positionCalc * var(--btnSize) + ($positionCalc) * var(--spacing));
+
+							--radio-offset: #{$leftOffset};
+						}
+					}
+				}
+			}
+
+			&:hover {
+				max-width: var(--hover-width);
+				width: var(--hover-width);
+
+				--radio-offset: 0 !important;
+			}
+
+			> label {
+				position: relative;
+				left: var(--radio-offset);
+
+				transition: left 0.2s ease-in-out;
+			}
+		}
+
+		label:has(input[type='radio']) {
+			aspect-ratio: 1;
+			border-radius: 50%;
+
+			min-width: var(--btnSize);
+
+			&:has(input[type='radio']:checked) {
+				box-shadow: $bevel-shadow-pop-out;
+				background: var(--pink);
+			}
+
+			> .lucide {
+				aspect-ratio: 1;
+				width: calc(var(--btnSize) - 2 * var(--spacing));
+				height: calc(var(--btnSize) - 2 * var(--spacing));
+			}
+		}
+	}
+}
+
+button[class*='-closer'] {
+	background: transparent !important;
+
+	color: var(--white);
+	svg {
+		fill: currentColor;
+		stroke: currentColor;
+	}
+
+    box-shadow: none !important;
+
+	filter: drop-shadow(0 0 0.125rem var(--black));
+	cursor: pointer;
+
+	transform: scale(1);
+	transition:
+		transform 0.15s ease-in-out,
+		stroke 0.15s ease-in-out,
+		color 0.15s ease-in-out,
+		filter 0.15s ease-in-out;
+
+	z-index: 4;
+
+	&:hover {
+		color: var(--pink);
+		filter: drop-shadow(0 0 0.25rem var(--pink));
+		transform: scale(1.25);
+	}
+}

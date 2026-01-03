@@ -2,11 +2,8 @@ import React from 'react';
 import '../../styles.scss';
 
 import MainContainer from '../MainContainer';
-import ModalContainer from '../ModalContainer';
 
 function App() {
-    const [currentModal, setCurrentModal] = React.useState(null);
-
     const logAllEvents = () => {
         Object.keys(window).forEach(key => {
             if(/./.test(key)){
@@ -24,7 +21,6 @@ function App() {
 	return (
 		<>
 			<MainContainer />
-			{currentModal && <ModalContainer currentModal={currentModal} setCurrentModal={setCurrentModal} />}
 		</>
 	);
 }

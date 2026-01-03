@@ -6,55 +6,163 @@ import ControllerBar from '../ControllerBar';
 import { saveFileMetadata, getFileMetadata } from '../../utils/fileMetadataStore';
 
 import { useResizeDetector } from 'react-resize-detector';
+import ModalContainer from '../ModalContainer/ModalContainer';
 
-// Set the defaults for starting the app
-let defaultToolSettings = {
-	// Which tool to use
-	toolMode: 'divider',
-	// Options for the tool
-	toolOptions: {
-		// (Divider only) Whether the divider moves automatically
-		auto: false,
-		// (Divider only) The animation pattern for the divider
-		type: 'backAndForth',
-		// Fix the position of the clipper
-		stick: false,
-		// Settings values for the tools, each tool has its own settings
-		value: {
-			divider: 30,
-			boxCutout: 200,
-			circleCutout: 200,
-		},
-		cutoutValueBounds: {
-			boxCutout: { min: 100, max: 500 },
-			circleCutout: { min: 100, max: 500 },
-		},
-	},
-	controllerBarOptions: {
-		floating: false,
-		position: 'bottom',
-	},
-	zoomScale: 1,
-	zoomMin: 0.25,
-	zoomMax: 6,
-	// Whether to invert the scroll zoom direction
-	swapScrollDirections: false,
-	// Playback speed for the video
-	playerSpeed: 1,
-	// Whether to loop the video
-	playerLoop: true,
-	// The amount of time to skip when the user clicks the skip button in ms
-	playerSkipTime: 100,
-	playerAudio: {
-		left: {
-			volume: 0.8,
-			muted: true,
-		},
-		right: {
-			volume: 0.8,
-			muted: true,
-		},
-	},
+import defaultToolSettings from '../../settings/defaultToolSettings';
+import defaultAppSettings from '../../settings/defaultAppSettings';
+import { clampToolZoomScale } from '../../settings/userSettingsSchema';
+
+const isPlainObject = value => {
+	return !!value && typeof value === 'object' && !Array.isArray(value);
+};
+
+const tryParseJsonObject = value => {
+	if (typeof value !== 'string' || !value.trim()) return null;
+	try {
+		const parsed = JSON.parse(value);
+		return isPlainObject(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
+};
+
+const tryCoerceNumberString = value => {
+	if (typeof value !== 'string') return null;
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+
+	// Strict numeric string: integer/float with optional exponent.
+	// Examples allowed: "10", "-3.5", ".25", "1e3", "-2.1E-2"
+	const numericPattern = /^[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[-+]?\d+)?$/i;
+	if (!numericPattern.test(trimmed)) return null;
+
+	const num = Number(trimmed);
+	return Number.isFinite(num) ? num : null;
+};
+
+// Deep-merge: keep user's existing values when compatible; fill any missing/new keys from defaults.
+// Also retains any extra keys the user may already have.
+const mergeWithDefaults = (defaults, saved) => {
+	if (!isPlainObject(defaults)) {
+		return { merged: saved ?? defaults, changed: saved !== defaults };
+	}
+
+	const safeSaved = isPlainObject(saved) ? saved : {};
+	let changed = false;
+	const merged = {};
+
+	for (const key of Object.keys(defaults)) {
+		const defaultValue = defaults[key];
+		const hasSavedKey = Object.prototype.hasOwnProperty.call(safeSaved, key);
+
+		if (!hasSavedKey) {
+			merged[key] = defaultValue;
+			changed = true;
+			continue;
+		}
+
+		const savedValue = safeSaved[key];
+
+		if (isPlainObject(defaultValue) && isPlainObject(savedValue)) {
+			const { merged: childMerged, changed: childChanged } = mergeWithDefaults(defaultValue, savedValue);
+			merged[key] = childMerged;
+			if (childChanged) changed = true;
+			continue;
+		}
+
+		// Strict: preserve only when types match.
+		// Special-case: when default expects a number, allow numeric strings ("100", "0.8").
+		if (typeof defaultValue === 'number') {
+			if (typeof savedValue === 'number') {
+				merged[key] = savedValue;
+			} else {
+				const coerced = tryCoerceNumberString(savedValue);
+				if (coerced !== null) {
+					merged[key] = coerced;
+					changed = true;
+				} else {
+					merged[key] = defaultValue;
+					changed = true;
+				}
+			}
+			continue;
+		}
+
+		if (typeof savedValue === typeof defaultValue) {
+			merged[key] = savedValue;
+		} else {
+			merged[key] = defaultValue;
+			changed = true;
+		}
+	}
+
+	// Keep any unknown keys (forward/backward compatibility)
+	for (const key of Object.keys(safeSaved)) {
+		if (!Object.prototype.hasOwnProperty.call(defaults, key)) {
+			merged[key] = safeSaved[key];
+		}
+	}
+
+	return { merged, changed };
+};
+
+const loadAndMigrateToolSettings = () => {
+	const raw = localStorage.getItem('toolSettings') || '';
+	const saved = tryParseJsonObject(raw);
+
+	if (!saved) {
+		localStorage.setItem('toolSettings', JSON.stringify(defaultToolSettings));
+		return defaultToolSettings;
+	}
+
+	const { merged, changed } = mergeWithDefaults(defaultToolSettings, saved);
+
+	// Safety: never persist divider auto-move as enabled.
+	if (merged?.toolOptions?.auto) {
+		merged.toolOptions.auto = false;
+	}
+
+	if (changed) {
+		localStorage.setItem('toolSettings', JSON.stringify(merged));
+	}
+
+	return merged;
+};
+
+const loadAndMigrateAppSettings = () => {
+	const raw = localStorage.getItem('appSettings') || '';
+	const saved = tryParseJsonObject(raw);
+	const toolRaw = localStorage.getItem('toolSettings') || '';
+	const savedTool = tryParseJsonObject(toolRaw);
+
+	const legacyZoomMin = typeof savedTool?.zoomMin === 'number' ? savedTool.zoomMin : null;
+	const legacyZoomMax = typeof savedTool?.zoomMax === 'number' ? savedTool.zoomMax : null;
+
+	if (!saved) {
+		const seeded = {
+			...defaultAppSettings,
+			...(legacyZoomMin !== null ? { zoomMin: legacyZoomMin } : null),
+			...(legacyZoomMax !== null ? { zoomMax: legacyZoomMax } : null),
+		};
+		localStorage.setItem('appSettings', JSON.stringify(seeded));
+		return seeded;
+	}
+
+	let { merged, changed } = mergeWithDefaults(defaultAppSettings, saved);
+
+	// Migrate legacy zoom bounds from toolSettings if appSettings doesn't have them.
+	if (typeof merged.zoomMin !== 'number' && legacyZoomMin !== null) {
+		merged = { ...merged, zoomMin: legacyZoomMin };
+		changed = true;
+	}
+	if (typeof merged.zoomMax !== 'number' && legacyZoomMax !== null) {
+		merged = { ...merged, zoomMax: legacyZoomMax };
+		changed = true;
+	}
+	if (changed) {
+		localStorage.setItem('appSettings', JSON.stringify(merged));
+	}
+	return merged;
 };
 
 // let defaultAppSettings = {
@@ -95,27 +203,29 @@ function MainContainer() {
 	// const leftMediaFromMemory = '';
 	// const rightMediaFromMemory = '';
 
-	const toolMemory = localStorage.getItem('toolSettings') || '';
 	// const appSettingsMemory = localStorage.getItem('appSettings') || '';
-
-	if (toolMemory) {
-		defaultToolSettings = JSON.parse(toolMemory);
-	} else {
-		localStorage.setItem('toolSettings', JSON.stringify(defaultToolSettings));
-	}
 
 	const mainContainerElem = React.useRef(null);
 
-	const [toolSettings, setToolSettings] = React.useState(defaultToolSettings),
+	const [toolSettings, setToolSettings] = React.useState(() => loadAndMigrateToolSettings()),
+		[appSettings, setAppSettings] = React.useState(() => loadAndMigrateAppSettings()),
 		[playbackStatus, setPlaybackStatus] = React.useState(defaultPlaybackStatus),
 		[leftMedia, setLeftMedia] = React.useState(null),
 		[rightMedia, setRightMedia] = React.useState(null),
 		[mainContainerSize, setMainContainerSize] = React.useState({ width: window.innerWidth, height: window.innerHeight }),
-		// [appSettings, setAppSettings] = React.useState(appSettingsMemory),
 		// [pendingFileHandles, setPendingFileHandles] = React.useState(null),
 		[userOS, setUserOS] = React.useState(detectUserOS),
+        [currentModal, setCurrentModal] = React.useState(null),
 		[leftMediaMetaData, setLeftMediaMetaData] = React.useState(null),
 		[rightMediaMetaData, setRightMediaMetaData] = React.useState(null);
+
+	// Modal props are snapshotted at open time; use refs so modal content can always read latest settings.
+	const toolSettingsRef = React.useRef(toolSettings);
+	const appSettingsRef = React.useRef(appSettings);
+	// Update refs synchronously so any open modal reads the latest values
+	// during the same render that committed state changes.
+	toolSettingsRef.current = toolSettings;
+	appSettingsRef.current = appSettings;
 
 	const updateMainContainerSize = ({ width, height }) => {
 		setMainContainerSize({ width, height });
@@ -210,6 +320,7 @@ function MainContainer() {
 							fileName: fileName,
 							filePath: leftPath,
 							mediaType: isImage ? 'image' : 'video',
+							fileSize: typeof arrayBuffer?.byteLength === 'number' ? arrayBuffer.byteLength : null,
 						});
 
 						setLeftMedia(blobUrl);
@@ -240,6 +351,7 @@ function MainContainer() {
 							fileName: fileName,
 							filePath: rightPath,
 							mediaType: isImage ? 'image' : 'video',
+							fileSize: typeof arrayBuffer?.byteLength === 'number' ? arrayBuffer.byteLength : null,
 						});
 
 						setRightMedia(blobUrl);
@@ -371,6 +483,17 @@ function MainContainer() {
 		localStorage.setItem('toolSettings', JSON.stringify(sanitizedSettings));
 	}, [toolSettings]);
 
+	// Save app settings to localStorage when they change
+	React.useEffect(() => {
+		localStorage.setItem('appSettings', JSON.stringify(appSettings));
+	}, [appSettings]);
+
+	// Safety: if app-level zoom bounds change, keep tool zoomScale in range.
+	React.useEffect(() => {
+		setToolSettings(prev => clampToolZoomScale(prev, appSettings));
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [appSettings?.zoomMin, appSettings?.zoomMax]);
+
 	// When left or right media are removed, reset mediaMetaData
 	React.useEffect(() => {
 		if (!leftMedia) {
@@ -401,7 +524,7 @@ function MainContainer() {
 			)} */}
 			<MediaContainer
 				toolSettings={toolSettings}
-				// appSettings={appSettings}
+				appSettings={appSettings}
 				setToolSettings={setToolSettings}
 				playbackStatus={playbackStatus}
 				leftMedia={leftMedia}
@@ -418,15 +541,20 @@ function MainContainer() {
 				isInElectron={isInElectron}
 				isInBrowser={isInBrowser}
 				userOS={userOS}
+				setCurrentModal={setCurrentModal}
 			/>
 			<ControllerBar
 				toolSettings={toolSettings}
-				// appSettings={appSettings}
+				appSettings={appSettings}
+				toolSettingsRef={toolSettingsRef}
+				appSettingsRef={appSettingsRef}
 				leftMedia={leftMedia}
 				rightMedia={rightMedia}
 				setLeftMedia={setLeftMedia}
 				setRightMedia={setRightMedia}
 				setToolSettings={setToolSettings}
+				setAppSettings={setAppSettings}
+				setCurrentModal={setCurrentModal}
 				playbackStatus={playbackStatus}
 				PlayerControls={PlayerControls}
 				mainContainerSize={mainContainerSize}
@@ -435,6 +563,7 @@ function MainContainer() {
 				isInElectron={isInElectron}
 				isInBrowser={isInBrowser}
 			/>
+            <ModalContainer currentModal={currentModal} setCurrentModal={setCurrentModal}/>
 		</div>
 	);
 }

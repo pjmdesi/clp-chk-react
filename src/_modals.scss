@@ -1,0 +1,135 @@
+#modalContainer {
+	position: absolute;
+	inset: 0;
+	z-index: 100;
+	display: block;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.15s ease-in-out;
+
+	&.show-modal {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	.modal-backdrop {
+		position: absolute;
+		inset: 0;
+		background-color: rgba($color: var(--black-rgb), $alpha: 0.55);
+		backdrop-filter: blur(8px);
+	}
+
+    #modalWindow {
+        position: absolute;
+        z-index: 101;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-radius: calc(var(--radius) * 2);
+        background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.9);
+        box-shadow:
+            0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.08) inset,
+            0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.3) inset;
+        user-select: none;
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: calc(var(--spacing) * 2);
+            border-bottom: 1px solid rgba($color: var(--white-rgb), $alpha: 0.08);
+        }
+
+        .modal-titlebar {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            cursor: move;
+            padding-right: calc(var(--spacing) * 2);
+        }
+
+        .modal-title {
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .modal-body {
+            padding: calc(var(--spacing) * 2);
+            flex: 1 1 auto;
+            overflow: auto;
+            user-select: text;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing);
+
+            scroll-behavior: auto;
+        }
+
+        .modal-resize-handle {
+            position: absolute;
+            z-index: 102;
+        }
+
+        .modal-resize-handle.n {
+            top: 0;
+            left: 10px;
+            right: 10px;
+            height: 10px;
+            cursor: ns-resize;
+        }
+        .modal-resize-handle.s {
+            bottom: 0;
+            left: 10px;
+            right: 10px;
+            height: 10px;
+            cursor: ns-resize;
+        }
+        .modal-resize-handle.e {
+            top: 10px;
+            bottom: 10px;
+            right: 0;
+            width: 10px;
+            cursor: ew-resize;
+        }
+        .modal-resize-handle.w {
+            top: 10px;
+            bottom: 10px;
+            left: 0;
+            width: 10px;
+            cursor: ew-resize;
+        }
+
+        .modal-resize-handle.ne {
+            top: 0;
+            right: 0;
+            width: 14px;
+            height: 14px;
+            cursor: nesw-resize;
+        }
+        .modal-resize-handle.nw {
+            top: 0;
+            left: 0;
+            width: 14px;
+            height: 14px;
+            cursor: nwse-resize;
+        }
+        .modal-resize-handle.se {
+            bottom: 0;
+            right: 0;
+            width: 14px;
+            height: 14px;
+            cursor: nwse-resize;
+        }
+        .modal-resize-handle.sw {
+            bottom: 0;
+            left: 0;
+            width: 14px;
+            height: 14px;
+            cursor: nesw-resize;
+        }
+    }
+
+}

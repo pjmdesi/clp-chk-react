@@ -36,7 +36,7 @@
 	}
 
 	&.right-media-info {
-		inset: 1rem 1rem auto auto;
+		inset: auto 1rem calc(1rem + var(--floating-tools-spacing) * 6) auto;
 		flex-direction: row-reverse;
 		justify-content: flex-end;
 	}
@@ -63,33 +63,6 @@
 		~ .media-closer {
 			inset: 1rem 1rem auto auto;
 		}
-
-		background: transparent;
-
-		color: var(--white);
-		svg {
-			fill: currentColor;
-			stroke: currentColor;
-		}
-
-		filter: drop-shadow(0 0 0.125rem var(--black));
-		cursor: pointer;
-
-		transform: scale(1);
-		transition:
-			transform 0.15s ease-in-out,
-			stroke 0.15s ease-in-out,
-			color 0.15s ease-in-out,
-			filter 0.15s ease-in-out;
-
-		z-index: 4;
-
-		&:hover {
-			color: var(--pink);
-			filter: drop-shadow(0 0 0.25rem var(--pink));
-			transform: scale(1.25);
-		}
-
 	}
 
     #mainContainer.floating-tools & {
@@ -101,10 +74,10 @@
     #mainContainer:focus-within & {
         opacity: 1;
         transition:
-            opacity 0.3s linear 0s,
-            inset 0.5s ease-in-out 0s,
-            padding 0.5s ease-in-out 0s,
-            0.5s ease-in-out 0s,
-            border-radius 0.5s ease-in-out 0s;
+            opacity var(--default-timing) linear 0s,
+            inset var(--default-timing) ease-in-out 0s,
+            padding var(--default-timing) ease-in-out 0s,
+            var(--default-timing) ease-in-out 0s,
+            border-radius var(--default-timing) ease-in-out 0s;
     }
 }

@@ -44,6 +44,7 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 					fileName: file.name,
 					filePath: null, // Browser mode doesn't have full path
 					mediaType: mediaType,
+					fileSize: typeof file.size === 'number' ? file.size : null,
 				});
 
 				setMediaFile(blobUrl);
@@ -75,6 +76,7 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 					fileName: file.name,
 					filePath: file.path, // Full path in Electron
 					mediaType: mediaType,
+					fileSize: typeof file.size === 'number' ? file.size : null,
 				});
 
 				setMediaFile(blobUrl);
@@ -93,6 +95,7 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 				fileName: file.name,
 				filePath: null,
 				mediaType: mediaType,
+				fileSize: typeof file.size === 'number' ? file.size : null,
 			});
 
 			setMediaFile(blobUrl);
@@ -147,6 +150,7 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 						fileName: file.name,
 						filePath: file.path,
 						mediaType: mediaType,
+						fileSize: typeof file.size === 'number' ? file.size : null,
 					});
 
 					setMediaFile(blobUrl);
@@ -162,6 +166,7 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 					fileName: file.name,
 					filePath: null,
 					mediaType: mediaType,
+					fileSize: typeof file.size === 'number' ? file.size : null,
 				});
 
 				setMediaFile(blobUrl);
@@ -180,7 +185,7 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 			>
 				<Icon name="FileVideo" className="input-icon" size={48} />
 				<Icon name="FileImage" className="input-icon" size={48} />
-				<span>Pick a file or drag&nbsp;it&nbsp;here</span>
+				<span>Pick a media file</span>
 
 				{/* Traditional file input - always present for label association and Electron */}
 				<input
