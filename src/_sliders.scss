@@ -4,8 +4,10 @@
 .control-slider-container {
 	--slider-dimen: 6px;
 	--slider-spacing: 8px;
+	--slider-tick-length: 8px;
+	--slider-tick-thickness: 2px;
 
-    flex: 1 0 auto;
+	flex: 1 0 auto;
 	display: flex;
 	// grid: 1fr / 100px auto;
 	align-items: center;
@@ -17,7 +19,7 @@
 	}
 
 	.rc-slider {
-		margin: var(--slider-spacing);
+		// margin: var(--slider-spacing);
 		padding: unset;
 		flex: 1 0 100px;
 		height: var(--slider-dimen);
@@ -94,6 +96,78 @@
 		}
 	}
 
+	.player-slider-wrapper {
+		position: relative;
+		display: flex;
+        flex: 1 0 auto;
+		align-items: center;
+		justify-content: center;
+
+        &.is-vertical {
+            padding: var(--spacing) 0;
+        }
+
+        &.is-horizontal {
+            padding: 0 var(--spacing);
+        }
+	}
+
+	.player-slider-ticks {
+		position: absolute;
+		pointer-events: none;
+
+		.player-slider-tick {
+			position: absolute;
+			pointer-events: auto;
+			cursor: pointer;
+            padding: var(--spacing);
+            border-radius: var(--spacing);
+
+            &:after {
+                content: '';
+                height: 100%;
+                width: 100%;
+                display: block;
+                position: relative;
+                background: rgba($color: var(--white-rgb), $alpha: 0.5);
+                border-radius: 1px;
+            }
+
+            transition: background var(--default-timing);
+
+            &:hover {
+                background: rgba(var(--white-rgb), 0.25);
+                &:after {
+                    background: var(--orange);
+                }
+            }
+		}
+
+		&.is-horizontal {
+			inset: calc(100% + 2px) var(--spacing) auto var(--spacing);
+			height: calc(var(--slider-tick-length) + 2 * var(--spacing));
+
+			.player-slider-tick {
+				width: calc(var(--slider-tick-thickness) + 2 * var(--spacing));
+				height: 100%;
+				top: 0;
+				transform: translateX(-50%);
+			}
+		}
+
+		&.is-vertical {
+			inset: var(--spacing) auto var(--spacing) calc(100% + 2px);
+			width: calc(var(--slider-tick-length) + 2 * var(--spacing));
+
+			.player-slider-tick {
+				width: 100%;
+				height: calc(var(--slider-tick-thickness) + 2 * var(--spacing));
+				left: 0;
+				transform: translateY(50%);
+			}
+		}
+	}
+
 	.unit-input-container {
 		flex: 0 0;
 
@@ -122,42 +196,59 @@
 
 	&#zoomLevelSlider {
 		--spacing: 4px;
+        --bottom-position: 72px;
 
 		position: absolute;
-		height: 250px;
-		inset: 50% 1rem auto auto;
-        transform: translateY(-50%);
+		min-height: 250px;
+		inset: 16px 16px var(--bottom-position) auto;
 
 		z-index: 4;
 		cursor: auto;
 
 		padding: var(--spacing);
-        background-color: var(--dark-blue);
+		background-color: var(--dark-blue);
 		border-radius: calc(var(--radius) + var(--spacing));
 
-
 		box-shadow:
-        0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
+			0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
 			0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
 
 		backdrop-filter: blur(var(--floating-tools-spacing));
 
-		transition: margin-bottom 0.3s ease, opacity 0.3s, background-color 0.3s;
+        transition:
+				opacity var(--default-timing) linear,
+				inset var(--default-timing) ease-in-out,
+				padding var(--default-timing) ease-in-out,
+				var(--default-timing) ease-in-out,
+				border-radius var(--default-timing) ease-in-out;
 
-        #mainContainer.floating-tools & {
-            opacity: 0;
-            background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+        &.floating-offset {
+            --bottom-position: calc(72px + var(--floating-tools-spacing) * 6);
         }
+
+		.player-slider-wrapper {
+			flex: 1 0 auto;
+
+			.rc-slider {
+				flex-basis: auto;
+				height: 100%;
+			}
+		}
+
+		#mainContainer.floating-tools & {
+			opacity: 0;
+			background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+		}
 
 		#mainContainer.floating-tools:hover &,
 		#mainContainer.floating-tools:focus-within & {
 			opacity: 1;
 			transition:
-				opacity 0.3s linear 0s,
-				inset 0.5s ease-in-out 0s,
-				padding 0.5s ease-in-out 0s,
-				0.5s ease-in-out 0s,
-				border-radius 0.5s ease-in-out 0s;
+				opacity var(--default-timing) linear,
+				inset var(--default-timing) ease-in-out,
+				padding var(--default-timing) ease-in-out,
+				var(--default-timing) ease-in-out,
+				border-radius var(--default-timing) ease-in-out;
 		}
 
 		.unit-input-container {

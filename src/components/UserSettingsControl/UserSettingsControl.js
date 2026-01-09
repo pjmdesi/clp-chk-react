@@ -110,51 +110,60 @@ function UserSettingsControl({ toolSettings, setToolSettings, appSettings, setAp
 			{userSettingsSections.map(section => (
 				<React.Fragment key={section.id}>
 					<div className="control-section">
-                        <div className="control-group">
-                            <h3>{section.title}</h3>
-                        </div>
-                        {section.items.map(item => {
-                            const value = getScopedValue(item.scope, item.key);
-                            const labelText = item.label || item.key;
-                            if (item.control === 'toggle' || item.type === 'boolean') {
-                                return (
-                                    <div className="control-group" key={`${item.scope}:${item.key}`}>
-                                        <div className="control-subgroup">
-                                            <PlayerToggle labelText={labelText} value={!!value} onChange={v => updateSetting(item.scope, item.key, v)} />
-                                        </div>
-                                    </div>
-                                );
-                            }
-                            if (item.control === 'slider' || item.type === 'number') {
-                                const min = typeof item.min === 'number' ? item.min : 0;
-                                const max = typeof item.max === 'number' ? item.max : 1;
-                                const step = typeof item.step === 'number' ? item.step : 1;
-                                const format = typeof item.format === 'function' ? item.format : v => String(v);
-                                const unit = item.unit || '';
-                                return (
-                                    <div className="control-group" key={`${item.scope}:${item.key}`}>
-                                        <div className="control-subgroup">
-                                            <label style={{ display: 'block', marginBottom: '6px' }}>{labelText}</label>
-                                            <PlayerSlider
-                                                name={labelText}
-                                                value={typeof value === 'number' ? value : 0}
-                                                sliderMinMax={[min, max]}
-                                                stepValue={step}
-                                                useSignificantFigures
-                                                label={unit}
-                                                onChange={v => updateSetting(item.scope, item.key, v)}
-                                                valueFormatter={format}
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            }
-                            return null;
-                        })}
-                    </div>
+						<div className="control-group">
+							<h3>{section.title}</h3>
+						</div>
+						{section.items.map(item => {
+							const value = getScopedValue(item.scope, item.key);
+							const labelText = item.label || item.key;
+							const tooltipText = item.description || '';
+							if (item.control === 'toggle' || item.type === 'boolean') {
+								return (
+									<div className="control-group" key={`${item.scope}:${item.key}`}>
+										<div className="control-subgroup">
+											<PlayerToggle labelText={labelText} value={!!value} onChange={v => updateSetting(item.scope, item.key, v)} title={tooltipText} />
+										</div>
+									</div>
+								);
+							}
+							if (item.control === 'slider' || item.type === 'number') {
+								const min = typeof item.min === 'number' ? item.min : 0;
+								const max = typeof item.max === 'number' ? item.max : 1;
+								const step = typeof item.step === 'number' ? item.step : 1;
+								const format = typeof item.format === 'function' ? item.format : v => String(v);
+								const unit = item.unit || '';
+								const tooltipText = item.description || '';
+								return (
+									<div className="control-group" key={`${item.scope}:${item.key}`}>
+										<div className="control-subgroup">
+											<label title={tooltipText}>{labelText}</label>
+											<PlayerSlider
+												name={labelText}
+												value={typeof value === 'number' ? value : 0}
+												sliderMinMax={[min, max]}
+												stepValue={step}
+												snapToTicks={true}
+												ticks={{
+													default: {
+														value: defaultAppSettings[item.key],
+														label: 'Default Value',
+													},
+												}}
+												useSignificantFigures
+												label={unit}
+												onChange={v => updateSetting(item.scope, item.key, v)}
+												valueFormatter={format}
+											/>
+										</div>
+									</div>
+								);
+							}
+							return null;
+						})}
+					</div>
 				</React.Fragment>
 			))}
-            <div className="control-group-spacer"></div>
+			<div className="control-group-spacer"></div>
 			<div className="control-group">
 				<button onClick={resetToDefaults} title="Reset user settings to defaults">
 					Reset to Defaults

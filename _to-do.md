@@ -5,22 +5,22 @@
 
 DO THIS NEXT:
 
-* Fit to window and fill window snap points need to be labelled in the zoom info overlay (also make sure all naming for that overlay is updated to indicate it's only for zooming)
-* Add snap points to zoom slider
-* Create media that has different sizes to test functionality
+* Create test media that has different sizes to test functionality
+* Change clipper size calculation to use absolute rounded pixels instead of percentages to avoid sub-pixel rendering issues
+* Tick marks on sliders are slightly off for some reason.
+* Tool size shortcut needs to adapt to the specific slider's step value
 
 ## UI
 
 ### Bugs / Issues (UI)
 
-* Only run the clip lock/unlock when clicking inside the video area when the window is focused. Otherwise, clicking outside the window and back in causes an unwanted toggle of the lock state.
-* Fix positioning/zoom for auto wiper for divider clipper
 * Need to account vertical video
   * Zoom to fit height instead of width when video is taller than wide
   * same with resizing window
 * Minimum window size for Electron app doesn't quite match that of the internal web app container minimum size
 
 #### MacOS Specific
+
 * Rounded corners do not match default macOS window corners. Either need to override default window corner radius or find the correct value to match.
   * Border radius seems to change based on focus state of window
 * Title bar buttons (close, minimize, maximize) are misaligned vertically
@@ -46,6 +46,8 @@ DO THIS NEXT:
 
 ### Features (UI)
 
+* ~~Add opacity overlay option for clipper tool (opacity slider for settings)~~ (1/8/25)
+* Double click the mediaContainer to reset the position of the clipper.
 * Add slider to control volume for each vid (maybe scroll on volume button fills in button outline?)
 * Add warning when videos are not the same ratio / length
 * (?) If videos are different lengths:
@@ -110,6 +112,10 @@ DO THIS NEXT:
 
 ### Complete
 
+* ~~Only run the clip lock/unlock when clicking inside the video area when the window is focused. Otherwise, clicking outside the window and back in causes an unwanted toggle of the lock state.~~ (1/8/25)
+* ~~Add snap points to zoom slider~~ (1/8/25)
+* ~~Fit to window and fill window snap points need to be labelled in the zoom info overlay (also make sure all naming for that overlay is updated to indicate it's only for zooming)~~ (1/8/25)
+* * ~~Fix positioning/zoom for auto wiper for divider clipper~~ (1/2/25)
 * ~~Modals~~ (1/2/25)
   * ~~Create modal template~~ (1/2/25)
   * ~~Hook up modal buttons~~ (1/2/25)

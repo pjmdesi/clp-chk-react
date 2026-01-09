@@ -7,8 +7,11 @@ import PlayerToggle from '../PlayerToggle/PlayerToggle';
 import Icon from '../Icon';
 import UserSettingsControl from '../UserSettingsControl';
 import { secondsToTimecode } from '../../utils/timecode';
+import HelpDocumentation from '../HelpDocumentation/HelpDocumentation';
 
 function ControllerBar({
+	defaultAppSettings,
+	defaultToolSettings,
 	toolSettings,
 	setToolSettings,
 	appSettings,
@@ -16,6 +19,8 @@ function ControllerBar({
 	toolSettingsRef,
 	appSettingsRef,
 	playbackStatus,
+	unifiedMediaDimensions,
+	setUnifiedMediaDimensions,
 	leftMedia,
 	rightMedia,
 	setLeftMedia,
@@ -28,7 +33,7 @@ function ControllerBar({
 	setCurrentModal,
 }) {
 	const [hasAnyVideo, setHasAnyVideo] = React.useState(false);
-    const [hasBothMedia, setHasBothMedia] = React.useState(!!leftMedia && !!rightMedia);
+	const [hasBothMedia, setHasBothMedia] = React.useState(!!leftMedia && !!rightMedia);
 	const [windowIsSmallerThanMedia, setWindowIsSmallerThanMedia] = React.useState(null);
 
 	const updateToolSettings = (newSettingVal, setting) => {
@@ -148,32 +153,32 @@ function ControllerBar({
 				},
 			},
 		},
-        horizontalDivider: {
-            name: 'horizontalDivider',
-            icon: 'SeparatorHorizontal',
-            label: 'Horizontal Divider',
-            action: () => updateToolSettings('horizontalDivider', 'toolMode'),
-            optionSet: {
-                backAndForth: {
-                    name: 'backAndForth',
-                    icon: 'ArrowUpDown',
-                    label: 'Back and Forth',
-                    action: () => updateToolSettingOptions('backAndForth', 'type'),
-                },
-                topToBottom: {
-                    name: 'topToBottom',
-                    icon: 'ArrowDownFromLine',
-                    label: 'Top to Bottom',
-                    action: () => updateToolSettingOptions('topToBottom', 'type'),
-                },
-                bottomToTop: {
-                    name: 'bottomToTop',
-                    icon: 'ArrowUpFromLine',
-                    label: 'Bottom to Top',
-                    action: () => updateToolSettingOptions('bottomToTop', 'type'),
-                },
-            },
-        },
+		horizontalDivider: {
+			name: 'horizontalDivider',
+			icon: 'SeparatorHorizontal',
+			label: 'Horizontal Divider',
+			action: () => updateToolSettings('horizontalDivider', 'toolMode'),
+			optionSet: {
+				backAndForth: {
+					name: 'backAndForth',
+					icon: 'ArrowUpDown',
+					label: 'Back and Forth',
+					action: () => updateToolSettingOptions('backAndForth', 'type'),
+				},
+				topToBottom: {
+					name: 'topToBottom',
+					icon: 'ArrowDownFromLine',
+					label: 'Top to Bottom',
+					action: () => updateToolSettingOptions('topToBottom', 'type'),
+				},
+				bottomToTop: {
+					name: 'bottomToTop',
+					icon: 'ArrowUpFromLine',
+					label: 'Bottom to Top',
+					action: () => updateToolSettingOptions('bottomToTop', 'type'),
+				},
+			},
+		},
 		circleCutout: {
 			name: 'circleCutout',
 			value: 'circleCutout',
@@ -185,11 +190,19 @@ function ControllerBar({
 		boxCutout: {
 			name: 'boxCutout',
 			value: 'boxCutout',
-			icon: 'BoxSelect',
+			icon: 'SquareDashed',
 			label: 'Box Cutout',
 			action: () => updateToolSettings('boxCutout', 'toolMode'),
 			optionSet: {},
 		},
+        overlay: {
+            name: 'overlay',
+            value: 'overlay',
+            icon: 'Layers2',
+            label: 'Overlay',
+            action: () => updateToolSettings('overlay', 'toolMode'),
+            optionSet: {},
+        },
 	};
 
 	const playerSpeedSet = {
@@ -263,14 +276,12 @@ function ControllerBar({
 
 	React.useEffect(() => {
 		setHasAnyVideo(leftMediaType === 'video' || rightMediaType === 'video');
-        setHasBothMedia(!!leftMediaMetaData && !!rightMediaMetaData);
+		setHasBothMedia(!!leftMediaMetaData && !!rightMediaMetaData);
 		mediaVsContainerSizeCheck();
 	}, [viewportSize, leftMediaMetaData, rightMediaMetaData, toolSettings.controllerBarOptions.floating]);
 
 	return (
-		<div
-			id="controllerBar"
-			className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${hasAnyVideo ? ' videos' : ''}`}>
+		<div id="controllerBar" className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${hasAnyVideo ? ' videos' : ''}`}>
 			{hasAnyVideo && (
 				<PlayerSlider
 					id="videoProgressSlider"
@@ -278,6 +289,8 @@ function ControllerBar({
 					sliderMinMax={[0, playbackStatus.playbackEndTime]}
 					value={playbackStatus.playbackPosition}
 					stepValue={0.01}
+					inputMode="timecode"
+					timecodeFramerate={framerate}
 					onChange={time => {
 						PlayerControls.setCurrentTime(time);
 					}}
@@ -305,10 +318,11 @@ function ControllerBar({
 				<PlayerRadioButtons id="toolModeButtonSet" buttonSet={toolModeSet} value={toolSettings.toolMode} />
 				<div className="control-subgroup">
 					{/* !BROKEN - adjustments for auto sweeper */}
-                        {(toolSettings.toolMode === 'divider' || toolSettings.toolMode === 'horizontalDivider') && (
+					{(toolSettings.toolMode === 'divider' || toolSettings.toolMode === 'horizontalDivider') && (
 						<PlayerToggle
 							id="autoDividerButton"
 							name="Move Divider Automatically"
+							title="Move Divider Automatically (Sweep)"
 							labelText="AUTO"
 							onChange={updateToolSettingOptions}
 							option="auto"
@@ -319,7 +333,7 @@ function ControllerBar({
 						<>
 							<PlayerRadioButtons id="toolOptions" buttonSet={toolModeSet[toolSettings.toolMode].optionSet} value={toolSettings.toolOptions.type} />
 							<PlayerSlider
-                                defaultSliderValue={24}
+								defaultSliderValue={24}
 								id="transitionSpeedSlider"
 								name="Transition Speed"
 								sliderMinMax={[10, 200]}
@@ -337,23 +351,67 @@ function ControllerBar({
 							id="clipperSizeSlider"
 							name="Tool Size"
 							sliderMinMax={[100, 500]}
-							value={toolSettings.toolOptions.value[toolSettings.toolMode]}
 							stepValue={1}
+							snapToTicks={true}
+							snapThreshold={10}
+							ticks={{
+								default: { value: defaultToolSettings.toolOptions.value[toolSettings.toolMode], title: `Default Size` },
+							}}
+							value={toolSettings.toolOptions.value[toolSettings.toolMode]}
 							onChange={updateToolSettingOptionsValue}
 							option={toolSettings.toolMode}
 							label="px"
 						/>
 					)}
+                    {toolSettings.toolMode === 'overlay' && (
+                        <PlayerSlider
+                            defaultSliderValue={0.5}
+                            id="overlayOpacitySlider"
+                            name="Overlay Opacity"
+                            sliderMinMax={[0, 1]}
+                            stepValue={0.01}
+                            snapThreshold={0.05}
+                            ticks={{
+                                default: { value: defaultToolSettings.toolOptions.value['overlay'], title: `Default Blend` },
+                            }}
+                            snapToTicks={true}
+                            value={toolSettings.toolOptions.value['overlay']}
+                            onChange={updateToolSettingOptionsValue}
+                            option={'overlay'}
+                            label=""
+                            valueFormatter={val => `${Math.round(val * 100)}%`}
+                        />
+                    )}
 				</div>
 			</div>
 			{hasAnyVideo && (
 				<div className="control-group">
 					<div className="control-subgroup">
-						<PlayerControl id="skipBackButton" iconName="SkipBack" onClick={() => PlayerControls.setCurrentTime(0)} />
-						<PlayerControl id="stepBackButton" iconName="StepBack" onClick={() => PlayerControls.skip(-0.1)} />
-						<PlayerControl id="playPauseButton" iconName={playbackStatus.playbackState === 'playing' ? 'Pause' : 'Play'} onClick={() => PlayerControls.playPause()} />
-						<PlayerControl id="stepForwardButton" iconName="StepForward" onClick={() => PlayerControls.skip(0.1)} />
-						<PlayerControl id="skipForwardButton" iconName="SkipForward" onClick={() => PlayerControls.setCurrentTime(playbackStatus.playbackEndTime - 0.1)} />
+						<PlayerControl id="skipBackButton" iconName="SkipBack" onClick={() => PlayerControls.setCurrentTime(0)} title="Jump to Start of Video timeline" />
+						<PlayerControl
+							id="stepBackButton"
+							iconName="StepBack"
+							onClick={() => PlayerControls.skip(-1 / unifiedMediaDimensions.framerate)}
+							title="Step Back One Frame"
+						/>
+						<PlayerControl
+							id="playPauseButton"
+							iconName={playbackStatus.playbackState === 'playing' ? 'Pause' : 'Play'}
+							onClick={() => PlayerControls.playPause()}
+							title="Play or Pause"
+						/>
+						<PlayerControl
+							id="stepForwardButton"
+							iconName="StepForward"
+							onClick={() => PlayerControls.skip(1 / unifiedMediaDimensions.framerate)}
+							title="Step Forward One Frame"
+						/>
+						<PlayerControl
+							id="skipForwardButton"
+							iconName="SkipForward"
+							onClick={() => PlayerControls.setCurrentTime(playbackStatus.playbackEndTime - 1 / unifiedMediaDimensions.framerate)}
+							title="Jump to End of Video timeline"
+						/>
 					</div>
 					<div className="control-subgroup">
 						<PlayerToggle
@@ -362,7 +420,7 @@ function ControllerBar({
 							onChange={updateToolSettings}
 							value={toolSettings.playerLoop}
 							option="playerLoop"
-							title="Loop Medias"
+							title="Loop Videos"
 						/>
 						<PlayerRadioButtons id="playerSpeedButtonSet" buttonSet={playerSpeedSet} value={toolSettings.playerSpeed} autoFold />
 						{toolSettings.playerSpeed === 8 && (
@@ -376,7 +434,7 @@ function ControllerBar({
 			<div className="control-group">
 				<PlayerToggle
 					id="controllerBarPosition"
-					title="Use Floating Control Bar"
+					title={toolSettings.controllerBarOptions.floating ? 'Use Floating Control Bar' : 'Use Docked Control Bar'}
 					iconName="Dock"
 					onChange={updateControllerBarOptions}
 					value={toolSettings.controllerBarOptions.floating}
@@ -412,6 +470,20 @@ function ControllerBar({
 					}}>
 					<Icon name="Settings" />
 				</button>
+                <button id="helpModalButton"
+                    title="Open Help / Documentation"
+                    onClick={() => {
+                        if (!setCurrentModal) {
+                            return;
+                        }
+                        setCurrentModal({
+                            key: 'help',
+                            title: 'Help / Documentation',
+							component: HelpDocumentation,
+                        });
+                    }}>
+                    <Icon name="CircleQuestionMark" />
+                </button>
 			</div>
 		</div>
 	);

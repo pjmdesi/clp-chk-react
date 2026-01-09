@@ -91,7 +91,7 @@
 	}
 
 	label.file-input {
-		--input-size: 150px;
+		--input-size: 120px;
 		--input-offset: 75%;
 		position: absolute;
 		top: calc(50% - var(--input-size) / 2);
@@ -104,6 +104,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: calc(4 * var(--spacing)) 0;
+        padding: var(--root-padding);
 
 		text-align: center;
 		justify-content: center;
@@ -161,6 +162,11 @@
 		will-change: contents;
 
 		z-index: 0;
+
+        &.overlay {
+            box-shadow: none;
+            background-color: transparent;
+        }
 
 		#clipperLock {
 			position: absolute;
@@ -220,6 +226,12 @@
 		&.circleCutout {
 			border-radius: 50%;
 		}
+
+        &.overlay {
+            #clipperLock {
+                display: none;
+            }
+        }
 	}
 
 	// Wrapper receives positioning - acts like the video element did before
@@ -302,7 +314,7 @@
 
 #validationMessage {
 	position: absolute;
-	inset: 1rem 1rem auto auto;
+	inset: 72px auto auto 50%;
 
 	display: flex;
 	flex-direction: column;
@@ -314,6 +326,7 @@
 	font-weight: 500;
 	background-color: var(--dark-blue);
 	border-radius: calc(var(--radius) + var(--spacing));
+    transform: translateX(-50%);
 
 	box-shadow:
 		0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,

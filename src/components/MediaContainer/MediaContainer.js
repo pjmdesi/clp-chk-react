@@ -7,6 +7,7 @@ import Icon from '../Icon';
 import VideoJSPlayer from '../VideoJSPlayer';
 
 import { getZoomBounds } from '../../settings/userSettingsSchema';
+import { keyboardControlsMap } from '../../settings/keyboardControlsMap';
 import ImagePlayer from '../ImagePlayer';
 import PlayerSlider from '../PlayerSlider';
 import { getFileMetadata } from '../../utils/fileMetadataStore';
@@ -29,6 +30,8 @@ function MediaContainer({
 	setRightMedia,
 	PlayerControls,
 	mainContainerSize,
+	unifiedMediaDimensions,
+	setUnifiedMediaDimensions,
 	leftMediaMetaData,
 	setLeftMediaMetaData,
 	rightMediaMetaData,
@@ -36,7 +39,7 @@ function MediaContainer({
 	resetStoredSettings,
 	isInElectron,
 	isInBrowser,
-    setCurrentModal,
+	setCurrentModal,
 }) {
 	const mediaContainerElem = React.useRef(),
 		leftMediaElem = React.useRef(),
@@ -57,15 +60,12 @@ function MediaContainer({
 		[clipperStyle, setClipperStyle] = React.useState({ width: '50%' }),
 		[clippedMediaWrapperStyle, setClippedMediaWrapperStyle] = React.useState({ minWidth: '200%', zIndex: 3 }),
 		[unClippedMediaWrapperStyle, setUnClippedMediaWrapperStyle] = React.useState({ minWidth: '100%' }),
-		[unifiedMediaDimensions, setUnifiedMediaDimensions] = React.useState({ width: 0, height: 0, aspectRatio: 1 }),
 		[containerOverlayInfo, setContainerOverlayInfo] = React.useState(''),
 		[toolModeBeforeMediaRemoval, setToolModeBeforeMediaRemoval] = React.useState('divider'),
 		[userInputDevice, setUserInputDevice] = React.useState('mouse'),
-        [firstRun, setFirstRun] = React.useState(true),
-		// [zoomSnap, setZoomSnap] = React.useState(null),
+		[firstRun, setFirstRun] = React.useState(true),
 		continuousClipInterval = React.useRef(null),
 		displayOverlayInfoTimeout = React.useRef(null),
-		// Framerate detection refs
 		leftFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null }),
 		rightFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null }),
 		timeUpdateAnimationFrame = React.useRef(null),
@@ -159,16 +159,16 @@ function MediaContainer({
 		const nowMissingMedia = !leftMedia || !rightMedia;
 		const nowHaveMedia = leftMedia && rightMedia;
 
-        // If first run, set tool mode to divider
-        if (firstRun) {
-            setFirstRun(false);
-            const newToolSettings = { ...toolSettings };
-            newToolSettings.toolOptions.auto = false;
-            newToolSettings.toolMode = 'divider';
-            setToolSettings(newToolSettings);
-            clipMedia();
-            return;
-        }
+		// If first run, set tool mode to divider
+		if (firstRun) {
+			setFirstRun(false);
+			const newToolSettings = { ...toolSettings };
+			newToolSettings.toolOptions.auto = false;
+			newToolSettings.toolMode = 'divider';
+			setToolSettings(newToolSettings);
+			clipMedia();
+			return;
+		}
 
 		if (hadMedia && nowMissingMedia) {
 			// Save current tool mode before switching to divider (only if not already divider)
@@ -192,7 +192,7 @@ function MediaContainer({
 		previousLeftMedia.current = leftMedia;
 		previousRightMedia.current = rightMedia;
 
-        clipMedia();
+		clipMedia();
 	}, [leftMedia, rightMedia, firstRun]);
 
 	// Validate media compatibility when both metadata sets are available
@@ -253,34 +253,37 @@ function MediaContainer({
 
 		let unifiedWidth = 0,
 			unifiedHeight = 0,
-			unifiedAspectRatio = 1;
+			unifiedAspectRatio = 1,
+			unifiedFramerate = 0;
 
 		if (leftMediaMetaData && rightMediaMetaData) {
 			// Use the larger dimensions to ensure both fit
 			unifiedWidth = Math.max(leftMediaMetaData.width, rightMediaMetaData.width);
 			unifiedHeight = Math.max(leftMediaMetaData.height, rightMediaMetaData.height);
 			unifiedAspectRatio = unifiedHeight / unifiedWidth;
+			// Use the higher framerate for playback controls
+			unifiedFramerate = Math.max(leftMediaMetaData.framerate || 0, rightMediaMetaData.framerate || 0);
 		} else if (leftMediaMetaData) {
 			unifiedWidth = leftMediaMetaData.width;
 			unifiedHeight = leftMediaMetaData.height;
 			unifiedAspectRatio = unifiedHeight / unifiedWidth;
+			unifiedFramerate = leftMediaMetaData.framerate || 0;
 		} else if (rightMediaMetaData) {
 			unifiedWidth = rightMediaMetaData.width;
 			unifiedHeight = rightMediaMetaData.height;
 			unifiedAspectRatio = unifiedHeight / unifiedWidth;
+			unifiedFramerate = rightMediaMetaData.framerate || 0;
 		}
 
-		// console.log(
-		// 	`Media Dimensions:\nLeft: ${leftMediaMetaData.width} | ${leftMediaMetaData.height}\nRight: ${rightMediaMetaData.width} | ${rightMediaMetaData.height}\nUnified: ${unifiedWidth} | ${unifiedHeight}`
-		// );
+		console.log(`Unified Dim: ${unifiedWidth} | ${unifiedHeight} (${unifiedAspectRatio})\nUnified Fr: ${unifiedFramerate}`);
 
-		setUnifiedMediaDimensions({ width: unifiedWidth, height: unifiedHeight, aspectRatio: unifiedAspectRatio });
+		setUnifiedMediaDimensions({ width: unifiedWidth, height: unifiedHeight, aspectRatio: unifiedAspectRatio, framerate: unifiedFramerate });
 	}, [leftMediaMetaData, rightMediaMetaData]);
 
-    // When unified media dimensions change, re-clip media
-    React.useEffect(() => {
-        clipMedia();
-    }, [unifiedMediaDimensions]);
+	// When unified media dimensions change, re-clip media
+	React.useEffect(() => {
+		clipMedia();
+	}, [unifiedMediaDimensions]);
 
 	// Updates the playback speed of the videos (images don't have playback speed)
 	React.useEffect(() => {
@@ -333,13 +336,16 @@ function MediaContainer({
 		const wrapperW = unifiedW * zoomLevel;
 		const wrapperH = unifiedH * zoomLevel;
 
+		// Find which special zoom point is active (if any) using the same labels used for
+		// snap stepping + slider tick marks.
+		const tickMarks = zoomSnapModelRef.current?.tickMarks || [];
+		const specialZoomPoint = tickMarks.find(p => typeof p?.value === 'number' && Math.abs(p.value - zoomLevel) < 0.001)?.label || null;
+
 		const getContainedDimensions = (containerW, containerH, mediaW, mediaH) => {
 			if (!containerW || !containerH || !mediaW || !mediaH) return { width: 0, height: 0, scale: 0 };
 			const scale = Math.min(containerW / mediaW, containerH / mediaH);
 			return { width: mediaW * scale, height: mediaH * scale, scale };
 		};
-
-		const isPixelPerfect = scale => Math.abs(scale - 1) < 1e-6;
 
 		const rightDims = rightMediaMetaData ? getContainedDimensions(wrapperW, wrapperH, rightMediaMetaData.width, rightMediaMetaData.height) : { width: 0, height: 0, scale: 0 };
 		const leftDims = leftMediaMetaData ? getContainedDimensions(wrapperW, wrapperH, leftMediaMetaData.width, leftMediaMetaData.height) : { width: 0, height: 0, scale: 0 };
@@ -349,17 +355,31 @@ function MediaContainer({
 		const renderedDimsDiffer = rightRendered.width !== leftRendered.width || rightRendered.height !== leftRendered.height;
 
 		let zoomInfo = `<h3>Zoom: ${Math.round(zoomLevel * 100)}%</h3>`;
+		let zoomSpecialPoint = {
+			left: '',
+			right: specialZoomPoint ? `[${specialZoomPoint}]` : '',
+		};
 
 		if (rightMediaMetaData && leftMediaMetaData) {
 			if (renderedDimsDiffer) {
-				zoomInfo += `<h6>L: ${leftRendered.width}px <small>⨉</small> ${leftRendered.height}px${isPixelPerfect(leftDims.scale) ? ' [1:1]' : ''}</h6>`;
-				zoomInfo += `<h6>R: ${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px${isPixelPerfect(rightDims.scale) ? ' [1:1]' : ''}</h6>`;
+
+                if (leftDims.width > rightDims.width) {
+                    zoomSpecialPoint.left = specialZoomPoint ? `[${specialZoomPoint}]` : '';
+                } else if (rightDims.width > leftDims.width) {
+                    zoomSpecialPoint.right = specialZoomPoint ? `[${specialZoomPoint}]` : '';
+                }
+
+				zoomInfo += `<h6>L: ${leftRendered.width}px <small>⨉</small> ${leftRendered.height}px ${zoomSpecialPoint.left}</h6>`;
+
+				zoomInfo += `<h6>R: ${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px ${zoomSpecialPoint.right}</h6>`;
+
 			} else {
-				const bothPixelPerfect = isPixelPerfect(leftDims.scale) && isPixelPerfect(rightDims.scale);
-				zoomInfo += `<h6>${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px${bothPixelPerfect ? ' [1:1]' : ''}</h6>`;
+
+				zoomInfo += `<h6>${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px ${zoomSpecialPoint.right}</h6>`;
+
 			}
 		} else {
-			zoomInfo += `<h6>${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px${isPixelPerfect(rightDims.scale) ? ' [1:1]' : ''}</h6>`;
+			zoomInfo += `<h6>${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px ${zoomSpecialPoint.right}</h6>`;
 		}
 
 		displayOverlayInfo(zoomInfo);
@@ -392,7 +412,6 @@ function MediaContainer({
 	// Framerate detection using requestVideoFrameCallback
 	const detectFramerate = (videoElement, framerateDataRef, isLeft) => {
 		const ticker = (now, metadata) => {
-
 			const data = framerateDataRef.current;
 			const mediaTimeDiff = Math.abs(metadata.mediaTime - data.lastMediaTime);
 			const frameNumDiff = Math.abs(metadata.presentedFrames - data.lastFrameNum);
@@ -453,7 +472,7 @@ function MediaContainer({
 				width: isImage ? target.naturalWidth : target.videoWidth,
 				height: isImage ? target.naturalHeight : target.videoHeight,
 				framerate: isImage ? 0 : 30, // Default for video, will be updated by detection
-                fileSize: fileMetadata?.fileSize || null,
+				fileSize: fileMetadata?.fileSize || null,
 			});
 
 			// Reset and start framerate detection for left video only
@@ -511,6 +530,50 @@ function MediaContainer({
 		}
 	};
 
+	// Electron-only: reveal the media file in the OS file manager (Explorer/Finder).
+	// Media sources are blob URLs in Electron; the real path is stored in file metadata.
+	const openMediaFile = React.useCallback(
+		mediaSource => {
+			if (!isInElectron) return;
+			if (!mediaSource) return;
+
+			let filePath = null;
+
+			if (typeof mediaSource === 'string') {
+				const fileMetadata = getFileMetadata(mediaSource);
+				filePath = fileMetadata?.filePath || null;
+
+				// Fallback if we ever pass an actual file path or file:// URL.
+				if (!filePath && mediaSource.startsWith('file://')) {
+					try {
+						filePath = decodeURIComponent(new URL(mediaSource).pathname);
+						// Windows file:// URLs include a leading slash before the drive letter.
+						if (/^\/[A-Za-z]:\//.test(filePath)) {
+							filePath = filePath.slice(1);
+						}
+					} catch (e) {
+						filePath = null;
+					}
+				} else if (!filePath) {
+					// If it's already a path, pass it through.
+					filePath = mediaSource;
+				}
+			}
+
+			if (!filePath) {
+				console.warn('[MediaContainer] Cannot open media file (missing file path).');
+				return;
+			}
+
+			if (window?.api?.openFile) {
+				window.api.openFile(filePath);
+			} else {
+				console.warn('[MediaContainer] window.api.openFile is not available.');
+			}
+		},
+		[isInElectron]
+	);
+
 	// Show overlay info element
 	// After a timeout, hide the overlay info element again
 	// Optionally cancel the timeout to prevent clearing the overlay info
@@ -551,10 +614,7 @@ function MediaContainer({
 
 		// Only update divider position from direct pointer movement (or autoscan).
 		// Wheel events should never move the divider; they should only zoom.
-		const shouldUpdateClipperFromEvent =
-			!toolSettings.stick &&
-			event &&
-			(typeof event.type === 'string' && (event.type === 'mousemove' || event.type === 'autoscan'));
+		const shouldUpdateClipperFromEvent = !toolSettings.stick && event && typeof event.type === 'string' && (event.type === 'mousemove' || event.type === 'autoscan');
 
 		// If the tool is not in stick mode and a qualifying event is passed, update the clipper position to use the event data
 		if (shouldUpdateClipperFromEvent) {
@@ -590,12 +650,12 @@ function MediaContainer({
 			};
 
 			// Set media wrapper dimensions
-			mediaWrapperStyle.width = unifiedMediaDimensions.width * toolSettings.zoomScale + 'px';
-			mediaWrapperStyle.height = unifiedMediaDimensions.height * toolSettings.zoomScale + 'px';
+			mediaWrapperStyle.width = Math.round(unifiedMediaDimensions.width * toolSettings.zoomScale) + 'px';
+			mediaWrapperStyle.height = Math.round(unifiedMediaDimensions.height * toolSettings.zoomScale) + 'px';
 
-			const mediaMinorValue = currentOffset[dividerOrtho.toLowerCase()];
-			const mediaMajorValue = currentOffset[dividerAxis.toLowerCase()];
-			const clippedMediaMajorValue = clipperOffsetAdjustment + currentOffset[dividerAxis.toLowerCase()];
+			const mediaMinorValue = Math.round(currentOffset[dividerOrtho.toLowerCase()]);
+			const mediaMajorValue = Math.round(currentOffset[dividerAxis.toLowerCase()]);
+			const clippedMediaMajorValue = clipperOffsetAdjustment + Math.round(currentOffset[dividerAxis.toLowerCase()]);
 
 			let mediaTranslateMinor = `translate${dividerOrtho}(calc(-50% + ${mediaMinorValue}px))`;
 			let mediaTranslateMajor = `translate${dividerAxis}(calc(-50% + ${mediaMajorValue}px))`;
@@ -606,6 +666,7 @@ function MediaContainer({
 			const clippedMediaWrapperStyle = {
 				...mediaWrapperStyle,
 				transform: `${clippedMediaTranslateMajor} ${mediaTranslateMinor}`,
+                opacity: '100%',
 			};
 
 			//* Clipped Media Style
@@ -619,7 +680,7 @@ function MediaContainer({
 			}
 		}
 
-		//! Need to fix cutout positioning and scaling logic
+        // Cutout tools
 		if (toolSettings.toolMode === 'circleCutout' || toolSettings.toolMode === 'boxCutout') {
 			const cutoutSettings = {
 				radius: toolSettings.toolOptions.value[toolSettings.toolMode],
@@ -642,13 +703,14 @@ function MediaContainer({
 
 			const cutoutMediaStyle = {
 				zIndex: 3,
+                opacity: '100%',
 			};
 
-			cutoutMediaStyle.width = unifiedMediaDimensions.width * toolSettings.zoomScale + 'px';
-			cutoutMediaStyle.height = unifiedMediaDimensions.height * toolSettings.zoomScale + 'px';
+			cutoutMediaStyle.width = Math.round(unifiedMediaDimensions.width * toolSettings.zoomScale) + 'px';
+			cutoutMediaStyle.height = Math.round(unifiedMediaDimensions.height * toolSettings.zoomScale) + 'px';
 
-			const mediaTranslateX = currentOffset.x - ((clipperPos.x / 100) * mediaContElem.offsetWidth - mediaContElem.offsetWidth / 2);
-			const mediaTranslateY = currentOffset.y - ((clipperPos.y / 100) * mediaContElem.offsetHeight - mediaContElem.offsetHeight / 2);
+			const mediaTranslateX = Math.round(currentOffset.x - ((clipperPos.x / 100) * mediaContElem.offsetWidth - mediaContElem.offsetWidth / 2));
+			const mediaTranslateY = Math.round(currentOffset.y - ((clipperPos.y / 100) * mediaContElem.offsetHeight - mediaContElem.offsetHeight / 2));
 
 			cutoutMediaStyle.transform = `translateX(calc(-50% + ${mediaTranslateX}px)) translateY(calc(-50% + ${mediaTranslateY}px))`;
 
@@ -657,19 +719,44 @@ function MediaContainer({
 
 			// Right media wrapper: standard full size, centered in container
 			const notCutoutMediaStyle = {
-				width: `${toolSettings.zoomScale * unifiedMediaDimensions.width}px`,
-				height: `${toolSettings.zoomScale * unifiedMediaDimensions.height}px`,
-				transform: `translateX(calc(-50% + ${currentOffset.x}px)) translateY(calc(-50% + ${currentOffset.y}px))`,
+				width: `${Math.round(toolSettings.zoomScale * unifiedMediaDimensions.width)}px`,
+				height: `${Math.round(toolSettings.zoomScale * unifiedMediaDimensions.height)}px`,
+				transform: `translateX(calc(-50% + ${Math.round(currentOffset.x)}px)) translateY(calc(-50% + ${Math.round(currentOffset.y)}px))`,
 			};
 
 			setUnClippedMediaWrapperStyle(notCutoutMediaStyle);
 		}
+
+        // Overlay tool
+        if (toolSettings.toolMode === 'overlay') {
+            setClipperStyle({
+                width: '100%',
+                height: '100%',
+            });
+
+            const mediaStyle = {
+                width: `${Math.round(toolSettings.zoomScale * unifiedMediaDimensions.width)}px`,
+                height: `${Math.round(toolSettings.zoomScale * unifiedMediaDimensions.height)}px`,
+                transform: `translateX(calc(-50% + ${Math.round(currentOffset.x)}px)) translateY(calc(-50% + ${Math.round(currentOffset.y)}px))`,
+            };
+
+            const opacityValue = toolSettings.toolOptions.value.overlay;
+            const overlayMediaStyle = {
+                ...mediaStyle,
+                opacity: `${opacityValue * 100}%`,
+            };
+
+            console.log(overlayMediaStyle);
+
+            setClippedMediaWrapperStyle(overlayMediaStyle);
+            setUnClippedMediaWrapperStyle(mediaStyle);
+        }
 	};
 
 	// Ensure interval callbacks can always call the latest clipMedia implementation.
 	clipMediaRef.current = clipMedia;
 
-    // Auto-clip media continuously based on tool settings
+	// Auto-clip media continuously based on tool settings
 	const clipMediaContinuous = () => {
 		// Force turn off stick mode (once)
 		if (toolSettingsRef.current?.stick) {
@@ -748,6 +835,32 @@ function MediaContainer({
 	};
 
 	const isDraggingRef = React.useRef(false);
+	const lastWindowFocusAtRef = React.useRef(0);
+	const FOCUS_CLICK_IGNORE_MS = 500;
+
+	// Electron-only: ignore the click that *focuses* the app window.
+	// On some platforms the window may become focused before React's click handler runs,
+	// so we cannot determine the prior focus state at click-time. Instead, we record the
+	// timestamp of the last focus event and ignore toggles for a short window afterwards.
+	React.useEffect(() => {
+		if (!isInElectron) return;
+
+		const onBlur = () => {
+			// No-op; we only care about when focus was gained.
+		};
+
+		const onFocus = () => {
+			lastWindowFocusAtRef.current = Date.now();
+		};
+
+		window.addEventListener('blur', onBlur);
+		window.addEventListener('focus', onFocus);
+
+		return () => {
+			window.removeEventListener('blur', onBlur);
+			window.removeEventListener('focus', onFocus);
+		};
+	}, [isInElectron]);
 
 	const handleMouseMove = e => {
 		// Cancel if both media are not present
@@ -763,10 +876,11 @@ function MediaContainer({
 		clipMedia(e);
 	};
 
+	const zoomPrecision = 3;
 	const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-	const roundZoom = value => Number(Number(value).toFixed(2));
+	const roundZoom = value => Number(Number(value).toFixed(zoomPrecision));
 
-	const buildZoomSnapPoints = React.useCallback(() => {
+	const computeZoomSnapModel = React.useCallback(() => {
 		const { zoomMin, zoomMax } = getZoomBounds(toolSettings, appSettings);
 		const zoomSpeed = typeof toolSettings.zoomSpeed === 'number' ? toolSettings.zoomSpeed : 0.02;
 
@@ -774,13 +888,15 @@ function MediaContainer({
 		const max = clamp(roundZoom(zoomMax), min, 100);
 		const anchor = 1;
 
+		const keyOf = p => roundZoom(p).toFixed(zoomPrecision);
+
 		// zoomSpeed is a fractional step per snap, e.g. 0.02 => 2%.
 		const step = zoomSpeed > 0 ? zoomSpeed : 0.02;
 		const factor = 1 + step;
 
 		// Base points (geometric scale around 1.0)
 		const basePointsMap = new Map();
-		const addBase = v => basePointsMap.set(roundZoom(v).toFixed(2), roundZoom(v));
+		const addBase = v => basePointsMap.set(keyOf(v), roundZoom(v));
 
 		addBase(anchor);
 		addBase(min);
@@ -806,12 +922,34 @@ function MediaContainer({
 
 		let basePoints = Array.from(basePointsMap.values()).sort((a, b) => a - b);
 
-		// Special snap points
-		const specialPointsMap = new Map();
-		const addSpecial = v => {
+		// Labeled special snap points (these become slider tick marks + overlay labels).
+		const tickMarksMap = new Map();
+		const addTickMark = (value, label) => {
+			if (typeof value !== 'number' || !Number.isFinite(value)) return;
+			if (typeof label !== 'string' || !label) return;
+			const rounded = roundZoom(clamp(value, min, max));
+			const k = keyOf(rounded);
+			const existing = tickMarksMap.get(k);
+			if (!existing) {
+				tickMarksMap.set(k, { value: rounded, label });
+				return;
+			}
+			if (existing.label === label) return;
+			existing.label = `${existing.label}/${label}`;
+		};
+
+		addTickMark(min, 'Min');
+		addTickMark(anchor, '1:1');
+		addTickMark(max, 'Max');
+
+		// Unlabeled special points used for snap insertion/removal behavior.
+		const insertSpecialMap = new Map();
+		const addInsertSpecial = v => {
 			if (typeof v !== 'number' || !Number.isFinite(v)) return;
-			const clamped = roundZoom(clamp(v, min, max));
-			specialPointsMap.set(clamped.toFixed(2), clamped);
+			const rounded = roundZoom(clamp(v, min, max));
+			// Never allow any special point to override the 100% snap.
+			if (keyOf(rounded) === keyOf(anchor)) return;
+			insertSpecialMap.set(keyOf(rounded), rounded);
 		};
 
 		const containerW = mediaContainerElem.current?.offsetWidth || 0;
@@ -821,10 +959,14 @@ function MediaContainer({
 
 		if (containerW > 0 && containerH > 0 && unifiedW > 0 && unifiedH > 0) {
 			// Fill-window: scale so unified width fills container width
-			addSpecial(containerW / unifiedW);
+			const fillRatio = containerW / unifiedW;
+			addInsertSpecial(fillRatio);
+			addTickMark(fillRatio, 'Fill');
 
 			// Fit-to-window: scale so unified dimensions fit entirely within container
-			addSpecial(Math.min(containerW / unifiedW, containerH / unifiedH));
+			const fitRatio = Math.min(containerW / unifiedW, containerH / unifiedH);
+			addInsertSpecial(fitRatio);
+			addTickMark(fitRatio, 'Fit');
 		}
 
 		// Pixel-perfect for smaller media (based on width baseline / 100% anchored to larger width)
@@ -832,20 +974,18 @@ function MediaContainer({
 		const rightW = rightMediaMetaData?.width || 0;
 		const smallerW = leftW && rightW ? Math.min(leftW, rightW) : leftW || rightW;
 		if (unifiedW > 0 && smallerW > 0 && smallerW !== unifiedW) {
-			addSpecial(smallerW / unifiedW);
+			const oneToOneSmRatio = smallerW / unifiedW;
+			addInsertSpecial(oneToOneSmRatio);
+			addTickMark(oneToOneSmRatio, '1:1 (Smaller)');
 		}
 
-		// Never allow any special point to override the 100% snap.
-		specialPointsMap.delete(anchor.toFixed(2));
-
-		const specialPoints = Array.from(specialPointsMap.values()).sort((a, b) => a - b);
+		const insertSpecialPoints = Array.from(insertSpecialMap.values()).sort((a, b) => a - b);
 
 		// For each special point, remove the adjacent base points (one smaller + one larger)
 		// unless that adjacent point is exactly the 100% snap or a bound (min/max).
 		const baseRemovals = new Set();
-		const isProtected = p => p === anchor || p === min || p === max;
-		const keyOf = p => roundZoom(p).toFixed(2);
-		for (const sp of specialPoints) {
+		const isProtected = p => keyOf(p) === keyOf(anchor) || keyOf(p) === keyOf(min) || keyOf(p) === keyOf(max);
+		for (const sp of insertSpecialPoints) {
 			// Find insertion index in basePoints (first base > sp)
 			let idx = 0;
 			while (idx < basePoints.length && basePoints[idx] <= sp) idx++;
@@ -861,9 +1001,9 @@ function MediaContainer({
 		}
 
 		const combined = new Map();
-		const addCombined = p => combined.set(roundZoom(p).toFixed(2), roundZoom(p));
+		const addCombined = p => combined.set(keyOf(p), roundZoom(p));
 		for (const p of basePoints) addCombined(p);
-		for (const p of specialPoints) addCombined(p);
+		for (const p of insertSpecialPoints) addCombined(p);
 
 		// Ensure anchor + bounds always present
 		addCombined(anchor);
@@ -871,8 +1011,13 @@ function MediaContainer({
 		addCombined(max);
 
 		const snapPoints = Array.from(combined.values()).sort((a, b) => a - b);
-		return { snapPoints, min, max };
+		const tickMarks = Array.from(tickMarksMap.values()).sort((a, b) => a.value - b.value);
+		return { snapPoints, tickMarks, min, max };
 	}, [appSettings?.zoomMin, appSettings?.zoomMax, toolSettings.zoomSpeed, mainContainerSize, unifiedMediaDimensions, leftMediaMetaData, rightMediaMetaData]);
+
+	const zoomSnapModelRef = React.useRef({ snapPoints: [], tickMarks: [], min: 0, max: 1 });
+	const zoomSnapModel = React.useMemo(() => computeZoomSnapModel(), [computeZoomSnapModel]);
+	zoomSnapModelRef.current = zoomSnapModel;
 
 	const getNextSnap = (currentZoom, direction, snapPoints) => {
 		const eps = 0.001;
@@ -895,6 +1040,7 @@ function MediaContainer({
 		return currentZoom;
 	};
 
+	// Animates the mainContainer element if user attempts to zoom beyond min/max bounds
 	const pulseZoomBound = boundType => {
 		const elem = mediaContainerElem.current;
 		if (!elem) return;
@@ -911,7 +1057,7 @@ function MediaContainer({
 	// - Otherwise, direction/steps will move between snap points.
 	const handleMediaZoom = (zoomLevel = null, { direction = 0, steps = 1 } = {}) => {
 		const newToolSettings = { ...toolSettings };
-		const { snapPoints, min, max } = buildZoomSnapPoints();
+		const { snapPoints, min, max } = zoomSnapModelRef.current || computeZoomSnapModel();
 
 		// Explicit zoom target (e.g., slider)
 		if (typeof zoomLevel === 'number' && Number.isFinite(zoomLevel)) {
@@ -1090,15 +1236,15 @@ function MediaContainer({
 	const handleMouseDown = event => {
 		if (!leftMedia || !rightMedia) return;
 
-        // Middle mouse button for panning
+		// Middle mouse button for panning
 		if (event.button === 1) {
 			event.preventDefault();
 
-			// Check for double-click (within 300ms)
+			// Check for double-click (within the doubleClickSpeed threshold defined by the user in app settings)
 			const now = Date.now();
 			const timeSinceLastClick = now - lastMiddleClickTimeRef.current;
 
-			if (timeSinceLastClick < 300) {
+			if (timeSinceLastClick < appSettings.doubleClickSpeed) {
 				// Double-click detected - reset zoom and offset
 				const newToolSettings = { ...toolSettings, zoomScale: 1 };
 				setToolSettings(newToolSettings);
@@ -1128,7 +1274,7 @@ function MediaContainer({
 			return;
 		}
 
-        // Right mouse button for quickly updating the clipper settings
+		// Right mouse button for quickly updating the clipper settings
 		if (event.button === 2) {
 			// prevent default context menu
 			event.preventDefault();
@@ -1153,12 +1299,12 @@ function MediaContainer({
 				return;
 			}
 
-            // If user right clicks while in vertical divider mode, switch to horizontal divider mode, and vice versa
-            if (toolSettings.toolMode === 'divider' || toolSettings.toolMode === 'horizontalDivider') {
-                const newToolSettings = { ...toolSettings };
-                newToolSettings.toolMode = toolSettings.toolMode === 'divider' ? 'horizontalDivider' : 'divider';
-                setToolSettings(newToolSettings);
-            }
+			// If user right clicks while in vertical divider mode, switch to horizontal divider mode, and vice versa
+			if (toolSettings.toolMode === 'divider' || toolSettings.toolMode === 'horizontalDivider') {
+				const newToolSettings = { ...toolSettings };
+				newToolSettings.toolMode = toolSettings.toolMode === 'divider' ? 'horizontalDivider' : 'divider';
+				setToolSettings(newToolSettings);
+			}
 
 			return;
 		}
@@ -1174,40 +1320,26 @@ function MediaContainer({
 	// Toggle clipper lock on click
 	// Prevents the clipper from moving when the mouse moves
 	const toggleClipperLock = e => {
+		// Electron-only: ignore clicks that occur immediately after the window gains focus.
+		// This prevents the user's "click to focus" from also toggling the clipper lock.
+		if (isInElectron && Date.now() - (lastWindowFocusAtRef.current || 0) < FOCUS_CLICK_IGNORE_MS) return;
 		if (e.target.id !== 'mediaContainer' && e.target.parentElement.id !== 'mediaContainer' && e.target.parentElement.id !== 'videoClipper') return;
 		if (!leftMedia || !rightMedia) return;
+        if (toolSettings.toolMode === 'overlay') return;
 		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) return;
 		setToolSettings({ ...toolSettings, stick: !toolSettings.stick });
-	};
 
-	// Keyboard controls
-	// Needs a lot of additions:
-	// - Frame stepping
-	// - Zoom in/out
-	// - Tool mode switching
-	// - Tool option adjustments
-	//   • Cutout size
-	//   • Divider auto on/off (when fixed)
-	//   • Divider auto speed (when fixed)
-	// - (?) Panning controls
-	// - (?) Clipper position controls
-	// - (?) Clipper lock toggle
-	// - (?) Reset zoom/offset
-	window.onkeyup = function (keyEvent) {
-		if (keyEvent.code === 'Space') {
-			PlayerControls.playPause();
-		}
-		if (keyEvent.code === 'ArrowLeft') {
-			PlayerControls.skip(-0.1);
-		}
-		if (keyEvent.code === 'ArrowRight') {
-			PlayerControls.skip(0.1);
-		}
-
-		// Shortcut: ctrl+alt+c to clear saved settings
-		if (keyEvent.code === 'KeyC' && keyEvent.ctrlKey && keyEvent.altKey) {
-			resetStoredSettings();
-		}
+        // Detect double click to reset clipper position
+        const now = Date.now();
+        const timeSinceLastClick = now - lastMiddleClickTimeRef.current;
+        if (timeSinceLastClick < appSettings.doubleClickSpeed) {
+            // Double-click detected - reset clipper position
+            setClipperPos({ x: 50, y: 50 });
+            lastMiddleClickTimeRef.current = 0;
+            setToolSettings({ ...toolSettings, stick: true });
+            clipMedia();
+            return;
+        }
 	};
 
 	const getCurrentFrame = media => {
@@ -1284,11 +1416,11 @@ function MediaContainer({
 					mediaType={leftMediaType}
 					mediaMetaData={leftMediaMetaData}
 					isInBrowser={isInBrowser}
+					openMediaFile={openMediaFile}
 					toolSettings={toolSettings}
 					setToolSettings={setToolSettings}
 					setMediaSource={setLeftMedia}
-                    setCurrentModal={setCurrentModal}
-					// setContainerOverlayInfo={setContainerOverlayInfo}
+					setCurrentModal={setCurrentModal}
 				/>
 			) : (
 				<MediaFileInput
@@ -1310,8 +1442,8 @@ function MediaContainer({
 						toolSettings={toolSettings}
 						setToolSettings={setToolSettings}
 						setMediaSource={setRightMedia}
-                        setCurrentModal={setCurrentModal}
-						// setContainerOverlayInfo={setContainerOverlayInfo}
+						setCurrentModal={setCurrentModal}
+						openMediaFile={openMediaFile}
 					/>
 					{rightMediaType === 'video' ? (
 						<VideoJSPlayer
@@ -1377,23 +1509,18 @@ function MediaContainer({
 					name="Zoom Level"
 					sliderMinMax={[getZoomBounds(toolSettings, appSettings).zoomMin * 100, getZoomBounds(toolSettings, appSettings).zoomMax * 100]}
 					value={toolSettings.zoomScale * 100}
-					stepValue={2}
+					stepValue={0.1}
+					ticks={zoomSnapModel.tickMarks.map(p => ({ value: p.value * 100, label: p.label }))}
+					snapToTicks={true}
+					snapThreshold={4}
 					direction="vertical"
 					onChange={value => handleMediaZoom(value / 100)}
 					// valueFormatter={value => Math.round(0.5 * Math.pow(12, (value - 50) / 550) * 100)}
 					option={toolSettings.zoomScale}
 					label="%"
-					style={{
-						transitionDelay: toolSettings.controllerBarOptions.floating ? '0s' : '0.5s',
-					}}
 				/>
 			)}
-            {validationWarnings.length > 0 && (
-                <ValidationMessage
-                    messages={validationWarnings}
-                    setMessages={setValidationWarnings}
-                />
-			)}
+			{validationWarnings.length > 0 && <ValidationMessage messages={validationWarnings} setMessages={setValidationWarnings} />}
 		</div>
 	);
 }

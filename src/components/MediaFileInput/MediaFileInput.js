@@ -183,9 +183,9 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
 			>
-				<Icon name="FileVideo" className="input-icon" size={48} />
-				<Icon name="FileImage" className="input-icon" size={48} />
-				<span>Pick a media file</span>
+				<Icon name="FilePlay" className="input-icon" size={36} />
+				<Icon name="FileImage" className="input-icon" size={36} />
+				<span>Choose a media file</span>
 
 				{/* Traditional file input - always present for label association and Electron */}
 				<input

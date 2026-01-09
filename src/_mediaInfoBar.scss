@@ -35,6 +35,14 @@
 		flex: 1 0 auto;
 	}
 
+    .control-slider-container {
+        min-width: 160px;
+        .unit-input-container {
+            min-width: 50px;
+            justify-content: flex-end;
+        }
+    }
+
 	&.right-media-info {
 		inset: auto 1rem calc(1rem + var(--floating-tools-spacing) * 6) auto;
 		flex-direction: row-reverse;

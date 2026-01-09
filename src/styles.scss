@@ -112,4 +112,39 @@ body:has(#mainContainer.electron-mode) {
 	&.floating-tools {
 		--floating-tools-spacing: 16px;
 	}
+
+    #appTooltip {
+        position: absolute;
+        pointer-events: none;
+        background-color: rgba($color: var(--black-rgb), $alpha: 0.75);
+        color: var(--white);
+        padding: calc(var(--spacing) / 2) var(--spacing);
+        border-radius: var(--radius);
+        font-size: calc(var(--font-size) * 0.875);
+        max-width: 300px;
+        z-index: 1000;
+		opacity: 0;
+		visibility: hidden;
+		transition:
+			opacity var(--default-timing) ease-in-out,
+			left var(--default-timing) ease-in-out,
+			bottom var(--default-timing) ease-in-out,
+			visibility 0s linear var(--default-timing);
+		white-space: pre-wrap;
+        box-shadow:
+            0 2px 4px rgba($color: var(--black-rgb), $alpha: 0.5),
+            0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
+            0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+        backdrop-filter: blur(8px);
+
+		&.visible {
+			opacity: 1;
+			visibility: visible;
+			transition:
+				opacity var(--default-timing) ease-in-out,
+				left var(--default-timing) ease-in-out,
+				bottom var(--default-timing) ease-in-out,
+				visibility 0s;
+		}
+    }
 }

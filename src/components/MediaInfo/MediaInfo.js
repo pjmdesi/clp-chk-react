@@ -1,7 +1,6 @@
 import React from 'react';
 
 function MediaInfo({ mediaData }) {
-	console.log('MediaInfo mediaData:', mediaData);
 	return (
 		<>
 			<h4>

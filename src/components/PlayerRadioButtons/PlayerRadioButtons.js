@@ -7,6 +7,10 @@ function PlayerRadioButtons({ buttonSet, value, autoFold = false, ...props}) {
 
 	const [radioValue, setRadioValue] = React.useState(value);
 
+	React.useEffect(() => {
+		setRadioValue(value);
+	}, [value]);
+
 	return (
         <div className={`control-radio-group${autoFold?' auto-fold':''}`}>
 			{Object.keys(buttonSet).map(buttonSetItem => {
@@ -28,7 +32,7 @@ function PlayerRadioButtons({ buttonSet, value, autoFold = false, ...props}) {
 								buttonItem.action(buttonVal);
 							}}
 							title={buttonItem.label}
-							checked={radioValue === buttonVal && 'checked'}
+							checked={radioValue === buttonVal}
 						/>
 						{buttonItem.icon ? <Icon name={buttonItem.icon} /> : buttonItem.label}
 						<VisuallyHidden>{buttonItem.label}</VisuallyHidden>

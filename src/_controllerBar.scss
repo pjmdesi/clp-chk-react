@@ -112,7 +112,24 @@
 	}
 
 	#transitionSpeedSlider,
+    #clipperSizeSlider,
+    #overlayOpacitySlider {
+		max-width: 200px;
+
+        --min-width: 50px;
+
+        .unit-input-container {
+            justify-content: flex-end;
+            min-width: var(--min-width);
+        }
+	}
+
+	#transitionSpeedSlider,
     #clipperSizeSlider {
-		max-width: 120px;
+		--min-width: 62px;
+	}
+
+    #overlayOpacitySlider {
+            --min-width: 50px;
 	}
 }

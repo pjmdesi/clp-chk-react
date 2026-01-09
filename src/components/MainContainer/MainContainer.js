@@ -1,5 +1,6 @@
 import React from 'react';
 
+import Tooltip from '../Tooltip';
 import MediaContainer from '../MediaContainer';
 import ControllerBar from '../ControllerBar';
 // import { getFileHandle, getFileFromHandle } from '../../utils/fileHandleStore';
@@ -10,7 +11,59 @@ import ModalContainer from '../ModalContainer/ModalContainer';
 
 import defaultToolSettings from '../../settings/defaultToolSettings';
 import defaultAppSettings from '../../settings/defaultAppSettings';
-import { clampToolZoomScale } from '../../settings/userSettingsSchema';
+import { clampToolZoomScale, getZoomBounds } from '../../settings/userSettingsSchema';
+import keyboardControlsMap from '../../settings/keyboardControlsMap';
+import UserSettingsControl from '../UserSettingsControl';
+
+const normalizeKey = key => {
+	if (typeof key !== 'string') return '';
+	// Spacebar comes through as " " in modern browsers.
+	if (key === ' ') return 'space';
+	return key.toLowerCase();
+};
+
+const normalizeModifiers = modifiers => {
+	if (!Array.isArray(modifiers)) return { ctrl: false, shift: false, alt: false, meta: false };
+	const lower = modifiers.map(m => String(m).toLowerCase());
+	return {
+		ctrl: lower.includes('ctrl') || lower.includes('control'),
+		shift: lower.includes('shift'),
+		alt: lower.includes('alt') || lower.includes('option'),
+		meta: lower.includes('meta') || lower.includes('cmd') || lower.includes('command'),
+	};
+};
+
+const isEditableElement = elem => {
+	if (!elem || typeof elem !== 'object') return false;
+	const tag = (elem.tagName || '').toLowerCase();
+	if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+	// contenteditable can be on the element or inherited.
+	if (elem.isContentEditable) return true;
+	return false;
+};
+
+const buildShortcutList = mapObj => {
+	const list = [];
+	if (!mapObj || typeof mapObj !== 'object') return list;
+
+	for (const entry of Object.values(mapObj)) {
+		if (!entry || typeof entry !== 'object') continue;
+		if (!entry.action || typeof entry.action !== 'string') continue;
+		const keys = Array.isArray(entry.keys) ? entry.keys : [];
+		const keySet = new Set(keys.map(k => normalizeKey(k)));
+		if (keySet.size === 0) continue;
+
+		const mods = normalizeModifiers(entry.modifiers);
+		const modCount = Number(mods.ctrl) + Number(mods.shift) + Number(mods.alt) + Number(mods.meta);
+		list.push({ action: entry.action, keys: keySet, modifiers: mods, modCount });
+	}
+
+	// Prefer more-specific combos first (e.g., Shift+A before plain A)
+	list.sort((a, b) => b.modCount - a.modCount);
+	return list;
+};
+
+const keyboardShortcuts = buildShortcutList(keyboardControlsMap);
 
 const isPlainObject = value => {
 	return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -215,7 +268,8 @@ function MainContainer() {
 		[mainContainerSize, setMainContainerSize] = React.useState({ width: window.innerWidth, height: window.innerHeight }),
 		// [pendingFileHandles, setPendingFileHandles] = React.useState(null),
 		[userOS, setUserOS] = React.useState(detectUserOS),
-        [currentModal, setCurrentModal] = React.useState(null),
+		[currentModal, setCurrentModal] = React.useState(null),
+		[unifiedMediaDimensions, setUnifiedMediaDimensions] = React.useState({ width: 0, height: 0, aspectRatio: 1, framerate: 0 }),
 		[leftMediaMetaData, setLeftMediaMetaData] = React.useState(null),
 		[rightMediaMetaData, setRightMediaMetaData] = React.useState(null);
 
@@ -244,54 +298,448 @@ function MainContainer() {
 		window.location.reload();
 	};
 
-	// Restore files from saved file handles in browser mode
-	// React.useEffect(() => {
-	// 	if (isInBrowser && window.showOpenFilePicker) {
-	// 		const restoreFiles = async () => {
+	const openSettingsModal = React.useCallback(() => {
+		setCurrentModal({
+			key: 'settings',
+			title: 'Settings',
+			component: UserSettingsControl,
+			props: {
+				toolSettings: toolSettingsRef.current,
+				setToolSettings,
+				appSettings: appSettingsRef.current,
+				setAppSettings,
+				toolSettingsRef,
+				appSettingsRef,
+			},
+		});
+	}, [appSettingsRef, setAppSettings, setToolSettings, toolSettingsRef]);
 
-	// 			const pendingHandles = { left: null, right: null };
+	const setZoomScaleClamped = React.useCallback(
+		target => {
+			setToolSettings(prev => {
+				const next = { ...prev, zoomScale: target };
+				return clampToolZoomScale(next, appSettingsRef.current);
+			});
+		},
+		[appSettingsRef, setToolSettings]
+	);
 
-	// 			// Try to restore left media
-	// 			const leftHandle = await getFileHandle('leftMediaHandle');
-	// 			if (leftHandle) {
-	// 				// Check if we already have permission (without requesting)
-	// 				const hasPermission = (await leftHandle.queryPermission()) === 'granted';
-	// 				if (hasPermission) {
-	// 					const file = await getFileFromHandle(leftHandle, false);
-	// 					if (file) {
-	// 						const blobUrl = URL.createObjectURL(file);
-	// 						setLeftMedia(blobUrl);
-	// 					}
-	// 				} else {
-	// 					pendingHandles.left = leftHandle;
-	// 				}
-	// 			}
+	const zoomByFactor = React.useCallback(
+		factor => {
+			setToolSettings(prev => {
+				const { zoomMin, zoomMax } = getZoomBounds(prev, appSettingsRef.current);
+				const current = typeof prev.zoomScale === 'number' ? prev.zoomScale : 1;
+				const zoomPrecision = 3;
+				const roundZoom = value => Number(Number(value).toFixed(zoomPrecision));
+				const clamped = Math.min(zoomMax, Math.max(zoomMin, roundZoom(current * factor)));
+				return { ...prev, zoomScale: clamped };
+			});
+		},
+		[appSettingsRef, setToolSettings]
+	);
 
-	// 			// Try to restore right media
-	// 			const rightHandle = await getFileHandle('rightMediaHandle');
-	// 			if (rightHandle) {
-	// 				// Check if we already have permission (without requesting)
-	// 				const hasPermission = (await rightHandle.queryPermission()) === 'granted';
-	// 				if (hasPermission) {
-	// 					const file = await getFileFromHandle(rightHandle, false);
-	// 					if (file) {
-	// 						const blobUrl = URL.createObjectURL(file);
-	// 						setRightMedia(blobUrl);
-	// 					}
-	// 				} else {
-	// 					pendingHandles.right = rightHandle;
-	// 				}
-	// 			}
+	const zoomToFitOrFill = React.useCallback(
+		mode => {
+			const container = document.getElementById('mediaContainer');
+			if (!container) return;
+			const containerW = container.offsetWidth || 0;
+			const containerH = container.offsetHeight || 0;
+			const unifiedW = unifiedMediaDimensions?.width || 0;
+			const unifiedH = unifiedMediaDimensions?.height || 0;
+			if (containerW <= 0 || containerH <= 0 || unifiedW <= 0 || unifiedH <= 0) return;
 
-	// 			// Store pending handles that need user interaction
-	// 			if (pendingHandles.left || pendingHandles.right) {
-	// 				setPendingFileHandles(pendingHandles);
-	// 			}
-	// 		};
+			const fitRatio = Math.min(containerW / unifiedW, containerH / unifiedH);
+			const fillRatio = containerW / unifiedW;
+			const target = mode === 'fill' ? fillRatio : fitRatio;
+			setZoomScaleClamped(target);
+		},
+		[setZoomScaleClamped, unifiedMediaDimensions]
+	);
 
-	// 		restoreFiles();
-	// 	}
-	// }, [isInBrowser]);
+	const cycleDividerAutoMoveDirection = React.useCallback(() => {
+		setToolSettings(prev => {
+			const toolMode = prev.toolMode;
+			if (toolMode !== 'divider' && toolMode !== 'horizontalDivider') return prev;
+			const current = prev?.toolOptions?.type || 'backAndForth';
+			const sequences = {
+				divider: ['backAndForth', 'leftToRight', 'rightToLeft'],
+				horizontalDivider: ['backAndForth', 'topToBottom', 'bottomToTop'],
+			};
+			const seq = sequences[toolMode] || ['backAndForth'];
+			const idx = Math.max(0, seq.indexOf(current));
+			const nextType = seq[(idx + 1) % seq.length];
+			return {
+				...prev,
+				toolOptions: {
+					...prev.toolOptions,
+					type: nextType,
+				},
+			};
+		});
+	}, [setToolSettings]);
+
+	const adjustToolSize = React.useCallback(
+		delta => {
+			setToolSettings(prev => {
+				const toolMode = prev.toolMode;
+				const current = prev?.toolOptions?.value?.[toolMode];
+				if (typeof current !== 'number') return prev;
+
+				let min = 0;
+				let max = 100;
+				let step = 1;
+				if (toolMode === 'boxCutout' || toolMode === 'circleCutout') {
+					const bounds = prev?.toolOptions?.cutoutValueBounds?.[toolMode];
+					min = typeof bounds?.min === 'number' ? bounds.min : 100;
+					max = typeof bounds?.max === 'number' ? bounds.max : 500;
+					step = 10;
+				}
+
+				const nextVal = Math.min(max, Math.max(min, current + delta * step));
+				return {
+					...prev,
+					toolOptions: {
+						...prev.toolOptions,
+						value: {
+							...prev.toolOptions.value,
+							[toolMode]: nextVal,
+						},
+					},
+				};
+			});
+		},
+		[setToolSettings]
+	);
+
+	const changePlaybackSpeed = React.useCallback(
+		direction => {
+			const speeds = [0.25, 0.5, 1, 2, 4, 8];
+			setToolSettings(prev => {
+				const current = typeof prev.playerSpeed === 'number' ? prev.playerSpeed : 1;
+				let idx = speeds.indexOf(current);
+				if (idx === -1) idx = speeds.indexOf(1);
+				idx = Math.min(speeds.length - 1, Math.max(0, idx + direction));
+				return { ...prev, playerSpeed: speeds[idx] };
+			});
+		},
+		[setToolSettings]
+	);
+
+	const swapMedias = React.useCallback(() => {
+		setLeftMedia(prevLeft => {
+			setRightMedia(prevRight => prevLeft);
+			return rightMedia;
+		});
+		setLeftMediaMetaData(prevLeft => {
+			setRightMediaMetaData(prevRight => prevLeft);
+			return rightMediaMetaData;
+		});
+	}, [rightMedia, rightMediaMetaData, setLeftMedia, setRightMedia, setLeftMediaMetaData, setRightMediaMetaData]);
+
+	const closeMediaSide = React.useCallback(
+		side => {
+			if (side === 'left') {
+				setLeftMedia(null);
+				setLeftMediaMetaData(null);
+			}
+			if (side === 'right') {
+				setRightMedia(null);
+				setRightMediaMetaData(null);
+			}
+			setPlaybackStatus(prev => ({
+				...prev,
+				playbackState: 'paused',
+				playbackPosition: 0,
+				isScrubbing: false,
+			}));
+		},
+		[setLeftMedia, setRightMedia, setLeftMediaMetaData, setRightMediaMetaData]
+	);
+
+	const PlayerControls = {
+		playPause: () => {
+			if (leftMedia && rightMedia) {
+				setPlaybackStatus(prevStatus => ({
+					...prevStatus,
+					playbackState: prevStatus.playbackState === 'paused' ? 'playing' : 'paused',
+				}));
+			}
+		},
+		play: () => {
+			if (leftMedia && rightMedia) {
+				setPlaybackStatus(prevStatus => ({
+					...prevStatus,
+					playbackState: 'playing',
+				}));
+			}
+		},
+		pause: () => {
+			if (leftMedia && rightMedia) {
+				setPlaybackStatus(prevStatus => ({
+					...prevStatus,
+					playbackState: 'paused',
+				}));
+			}
+		},
+		skip: time => {
+			if (leftMedia && rightMedia) {
+				setPlaybackStatus(prevStatus => ({
+					...prevStatus,
+					playbackState: 'paused',
+					playbackPosition: prevStatus.playbackPosition + time,
+				}));
+			}
+		},
+		setCurrentTime: time => {
+			if (leftMedia && rightMedia) {
+				setPlaybackStatus(prevStatus => ({
+					...prevStatus,
+					playbackPosition: time,
+				}));
+			}
+		},
+		setEndTime: time => {
+			if (leftMedia && rightMedia) {
+				setPlaybackStatus(prevStatus => ({
+					...prevStatus,
+					playbackEndTime: time,
+				}));
+			}
+		},
+		setIsScrubbing: isScrubbing => {
+			if (leftMedia && rightMedia) {
+				setPlaybackStatus(prevStatus => ({
+					...prevStatus,
+					isScrubbing: isScrubbing,
+				}));
+			}
+		},
+	};
+
+	const executeKeyboardAction = React.useCallback(
+		action => {
+			const tool = toolSettingsRef.current;
+			const app = appSettingsRef.current;
+			switch (action) {
+				case 'zoomIn': {
+					const speed = typeof tool?.zoomSpeed === 'number' ? tool.zoomSpeed : 0.02;
+					zoomByFactor(1 + Math.max(0.001, speed));
+					return true;
+				}
+				case 'zoomOut': {
+					const speed = typeof tool?.zoomSpeed === 'number' ? tool.zoomSpeed : 0.02;
+					zoomByFactor(1 / (1 + Math.max(0.001, speed)));
+					return true;
+				}
+				case 'zoomTo100':
+					setZoomScaleClamped(1);
+					return true;
+				case 'zoomTo100Smaller': {
+					const unifiedW = unifiedMediaDimensions?.width || 0;
+					const leftW = leftMediaMetaData?.width || 0;
+					const rightW = rightMediaMetaData?.width || 0;
+					const smallerW = leftW && rightW ? Math.min(leftW, rightW) : leftW || rightW;
+					if (unifiedW > 0 && smallerW > 0) {
+						setZoomScaleClamped(smallerW / unifiedW);
+					} else {
+						setZoomScaleClamped(1);
+					}
+					return true;
+				}
+				case 'zoomToFit':
+					zoomToFitOrFill('fit');
+					return true;
+				case 'zoomToFill':
+					zoomToFitOrFill('fill');
+					return true;
+				case 'toggleToolLock':
+					setToolSettings(prev => {
+						const current = typeof prev.stick === 'boolean' ? prev.stick : !!prev?.toolOptions?.stick;
+						const next = !current;
+						return {
+							...prev,
+							stick: next,
+							toolOptions: {
+								...(prev.toolOptions || {}),
+								stick: next,
+							},
+						};
+					});
+					return true;
+				case 'toolDividerHorizontal':
+					setToolSettings(prev => ({
+						...prev,
+						toolMode: 'horizontalDivider',
+						toolOptions: { ...prev.toolOptions, auto: false },
+					}));
+					return true;
+				case 'toolDividerVertical':
+					setToolSettings(prev => ({
+						...prev,
+						toolMode: 'divider',
+						toolOptions: { ...prev.toolOptions, auto: false },
+					}));
+					return true;
+				case 'toolBoxCutout':
+					setToolSettings(prev => ({
+						...prev,
+						toolMode: 'boxCutout',
+						toolOptions: { ...prev.toolOptions, auto: false },
+					}));
+					return true;
+				case 'toolCircleCutout':
+					setToolSettings(prev => ({
+						...prev,
+						toolMode: 'circleCutout',
+						toolOptions: { ...prev.toolOptions, auto: false },
+					}));
+					return true;
+				case 'toolAutoMoveToggle':
+					setToolSettings(prev => {
+						if (prev.toolMode !== 'divider' && prev.toolMode !== 'horizontalDivider') return prev;
+						return {
+							...prev,
+							toolOptions: {
+								...prev.toolOptions,
+								auto: !prev.toolOptions.auto,
+							},
+						};
+					});
+					return true;
+				case 'toolAutoMoveDirection':
+					cycleDividerAutoMoveDirection();
+					return true;
+				case 'toolSizeIncrease':
+					adjustToolSize(1);
+					return true;
+				case 'toolSizeDecrease':
+					adjustToolSize(-1);
+					return true;
+				case 'swapVideos':
+					swapMedias();
+					return true;
+				case 'openSettingsModal':
+					openSettingsModal();
+					return true;
+				case 'videoPlayPause':
+					PlayerControls.playPause();
+					return true;
+				case 'videoFrameForward': {
+					const fr = unifiedMediaDimensions?.framerate || 30;
+					PlayerControls.skip(1 / fr);
+					return true;
+				}
+				case 'videoFrameBackward': {
+					const fr = unifiedMediaDimensions?.framerate || 30;
+					PlayerControls.skip(-1 / fr);
+					return true;
+				}
+				case 'videoFrameForwardLarge': {
+					const fr = unifiedMediaDimensions?.framerate || 30;
+					PlayerControls.skip(10 / fr);
+					return true;
+				}
+				case 'videoFrameBackwardLarge': {
+					const fr = unifiedMediaDimensions?.framerate || 30;
+					PlayerControls.skip(-10 / fr);
+					return true;
+				}
+				case 'videoMoveToStart':
+					PlayerControls.setCurrentTime(0);
+					return true;
+				case 'videoMoveToEnd': {
+					const fr = unifiedMediaDimensions?.framerate || 30;
+					const end = typeof playbackStatus?.playbackEndTime === 'number' ? playbackStatus.playbackEndTime : 0;
+					PlayerControls.setCurrentTime(Math.max(0, end - 1 / fr));
+					return true;
+				}
+				case 'videoToggleLoop':
+					setToolSettings(prev => ({ ...prev, playerLoop: !prev.playerLoop }));
+					return true;
+				case 'videoIncreaseSpeed':
+					changePlaybackSpeed(1);
+					return true;
+				case 'videoDecreaseSpeed':
+					changePlaybackSpeed(-1);
+					return true;
+				case 'toggleControllerDocking':
+					setToolSettings(prev => ({
+						...prev,
+						controllerBarOptions: {
+							...prev.controllerBarOptions,
+							floating: !prev.controllerBarOptions.floating,
+						},
+					}));
+					return true;
+				case 'clearLocalSettings':
+					resetStoredSettings();
+					return true;
+				case 'closeLeftVideo':
+					closeMediaSide('left');
+					return true;
+				case 'closeRightVideo':
+					closeMediaSide('right');
+					return true;
+				default:
+					return false;
+			}
+		},
+		[
+			PlayerControls,
+			adjustToolSize,
+			appSettingsRef,
+			changePlaybackSpeed,
+			closeMediaSide,
+			cycleDividerAutoMoveDirection,
+			leftMediaMetaData,
+			openSettingsModal,
+			playbackStatus?.playbackEndTime,
+			resetStoredSettings,
+			rightMediaMetaData,
+			setToolSettings,
+			setZoomScaleClamped,
+			swapMedias,
+			toolSettingsRef,
+			unifiedMediaDimensions,
+			zoomByFactor,
+			zoomToFitOrFill,
+		]
+	);
+
+	React.useEffect(() => {
+		const onKeyDown = e => {
+			// Don't hijack shortcuts while typing into inputs/textareas/selects/contenteditable.
+			const active = document.activeElement;
+			if (isEditableElement(active)) return;
+			// Also ignore when IME composition is active.
+			if (e.isComposing) return;
+			// Ignore if event already handled.
+			if (e.defaultPrevented) return;
+
+			const key = normalizeKey(e.key);
+			if (!key) return;
+
+			for (const shortcut of keyboardShortcuts) {
+				if (!shortcut.keys.has(key)) continue;
+
+				// Exact match for ctrl/alt/meta; shift is only required when specified.
+				if (e.ctrlKey !== shortcut.modifiers.ctrl) continue;
+				if (e.altKey !== shortcut.modifiers.alt) continue;
+				if (e.metaKey !== shortcut.modifiers.meta) continue;
+				if (shortcut.modifiers.shift && !e.shiftKey) continue;
+
+				const handled = executeKeyboardAction(shortcut.action);
+				if (handled) {
+					e.preventDefault();
+					e.stopPropagation();
+				}
+				return;
+			}
+		};
+
+		window.addEventListener('keydown', onKeyDown, true);
+		return () => window.removeEventListener('keydown', onKeyDown, true);
+	}, [executeKeyboardAction]);
 
 	// Restore files from saved paths in Electron
 	React.useEffect(() => {
@@ -367,89 +815,6 @@ function MainContainer() {
 		}
 	}, [isInBrowser]);
 
-	// Function to request permission and restore files (requires user interaction)
-	// const restorePendingFiles = async () => {
-	// 	if (!pendingFileHandles) return;
-
-	// 	if (pendingFileHandles.left) {
-	// 		const file = await getFileFromHandle(pendingFileHandles.left, true);
-	// 		if (file) {
-	// 			const blobUrl = URL.createObjectURL(file);
-	// 			setLeftMedia(blobUrl);
-	// 		}
-	// 	}
-
-	// 	if (pendingFileHandles.right) {
-	// 		const file = await getFileFromHandle(pendingFileHandles.right, true);
-	// 		if (file) {
-	// 			const blobUrl = URL.createObjectURL(file);
-	// 			setRightMedia(blobUrl);
-	// 		}
-	// 	}
-
-	// 	setPendingFileHandles(null);
-	// };
-
-	const PlayerControls = {
-		playPause: () => {
-			if (leftMedia && rightMedia) {
-				setPlaybackStatus(prevStatus => ({
-					...prevStatus,
-					playbackState: prevStatus.playbackState === 'paused' ? 'playing' : 'paused',
-				}));
-			}
-		},
-		play: () => {
-			if (leftMedia && rightMedia) {
-				setPlaybackStatus(prevStatus => ({
-					...prevStatus,
-					playbackState: 'playing',
-				}));
-			}
-		},
-		pause: () => {
-			if (leftMedia && rightMedia) {
-				setPlaybackStatus(prevStatus => ({
-					...prevStatus,
-					playbackState: 'paused',
-				}));
-			}
-		},
-		skip: time => {
-			if (leftMedia && rightMedia) {
-				setPlaybackStatus(prevStatus => ({
-					...prevStatus,
-					playbackState: 'paused',
-					playbackPosition: prevStatus.playbackPosition + time,
-				}));
-			}
-		},
-		setCurrentTime: time => {
-			if (leftMedia && rightMedia) {
-				setPlaybackStatus(prevStatus => ({
-					...prevStatus,
-					playbackPosition: time,
-				}));
-			}
-		},
-		setEndTime: time => {
-			if (leftMedia && rightMedia) {
-				setPlaybackStatus(prevStatus => ({
-					...prevStatus,
-					playbackEndTime: time,
-				}));
-			}
-		},
-		setIsScrubbing: isScrubbing => {
-			if (leftMedia && rightMedia) {
-				setPlaybackStatus(prevStatus => ({
-					...prevStatus,
-					isScrubbing: isScrubbing,
-				}));
-			}
-		},
-	};
-
 	// In Electron, save left file path (not blob URL) to localStorage
 	React.useEffect(() => {
 		if (!isInBrowser && leftMedia) {
@@ -478,8 +843,8 @@ function MainContainer() {
 
 	// Save tool settings to localStorage when they change
 	React.useEffect(() => {
-        const sanitizedSettings = structuredClone(toolSettings);
-        sanitizedSettings.toolOptions.auto = false; // Do not persist 'auto' state
+		const sanitizedSettings = structuredClone(toolSettings);
+		sanitizedSettings.toolOptions.auto = false; // Do not persist 'auto' state
 		localStorage.setItem('toolSettings', JSON.stringify(sanitizedSettings));
 	}, [toolSettings]);
 
@@ -504,9 +869,9 @@ function MainContainer() {
 		}
 	}, [leftMedia, rightMedia]);
 
-    React.useEffect(() => {
-        setUserOS(detectUserOS);
-    });
+	React.useEffect(() => {
+		setUserOS(detectUserOS);
+	});
 
 	return (
 		<div
@@ -522,6 +887,7 @@ function MainContainer() {
 					</button>
 				</div>
 			)} */}
+			<Tooltip appSettings={appSettings} />
 			<MediaContainer
 				toolSettings={toolSettings}
 				appSettings={appSettings}
@@ -533,6 +899,8 @@ function MainContainer() {
 				setRightMedia={setRightMedia}
 				PlayerControls={PlayerControls}
 				mainContainerSize={mainContainerSize}
+				unifiedMediaDimensions={unifiedMediaDimensions}
+				setUnifiedMediaDimensions={setUnifiedMediaDimensions}
 				leftMediaMetaData={leftMediaMetaData}
 				setLeftMediaMetaData={setLeftMediaMetaData}
 				rightMediaMetaData={rightMediaMetaData}
@@ -544,10 +912,14 @@ function MainContainer() {
 				setCurrentModal={setCurrentModal}
 			/>
 			<ControllerBar
+                defaultAppSettings={defaultAppSettings}
+                defaultToolSettings={defaultToolSettings}
 				toolSettings={toolSettings}
 				appSettings={appSettings}
 				toolSettingsRef={toolSettingsRef}
 				appSettingsRef={appSettingsRef}
+				unifiedMediaDimensions={unifiedMediaDimensions}
+				setUnifiedMediaDimensions={setUnifiedMediaDimensions}
 				leftMedia={leftMedia}
 				rightMedia={rightMedia}
 				setLeftMedia={setLeftMedia}
@@ -563,7 +935,7 @@ function MainContainer() {
 				isInElectron={isInElectron}
 				isInBrowser={isInBrowser}
 			/>
-            <ModalContainer currentModal={currentModal} setCurrentModal={setCurrentModal}/>
+			<ModalContainer currentModal={currentModal} setCurrentModal={setCurrentModal} />
 		</div>
 	);
 }

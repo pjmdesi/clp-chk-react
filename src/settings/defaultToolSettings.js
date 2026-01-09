@@ -18,6 +18,7 @@ const defaultToolSettings = {
 			horizontalDivider: 30,
 			boxCutout: 200,
 			circleCutout: 200,
+            overlay: 0.5,
 		},
 		cutoutValueBounds: {
 			boxCutout: { min: 100, max: 500 },
