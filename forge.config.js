@@ -1,13 +1,27 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 const path = require('path');
+const { generateThirdPartyNotices } = require('./scripts/generate-third-party-notices');
+const { generateThirdPartyLicenses } = require('./scripts/generate-third-party-licenses');
 
 module.exports = {
 	packagerConfig: {
 		asar: true,
 		icon: './src/assets/images/app-icon',
+		extraResource: [
+			path.join(__dirname, 'LICENSE'),
+			path.join(__dirname, 'THIRD_PARTY_NOTICES.md'),
+			path.join(__dirname, 'third_party_licenses'),
+		],
 	},
 	rebuildConfig: {},
+	hooks: {
+		prePackage: async () => {
+			// Keep third-party notices up to date in release builds.
+			generateThirdPartyNotices({ rootDir: __dirname, outFile: 'THIRD_PARTY_NOTICES.md' });
+			generateThirdPartyLicenses({ rootDir: __dirname, outDir: 'third_party_licenses' });
+		},
+	},
 	makers: [
 		{
 			name: '@electron-forge/maker-squirrel',

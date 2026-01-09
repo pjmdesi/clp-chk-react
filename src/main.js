@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const DEV = !app.isPackaged;
 
 const isMac = process.platform === 'darwin';
+const isWindows = process.platform === 'win32';
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -206,13 +207,18 @@ const createWindow = () => {
 		// minHeight: 600 + DEV * 400,
 		minWidth: 900,
 		minHeight: 600,
+		resizable: true,
 		titleBarStyle: DEV ? 'default' : 'hidden',
 		titleBarOverlay: !DEV,
-		transparent: !DEV,
+		// Transparent (layered) windows on Windows can break native resizing + Aero snapping.
+		transparent: !DEV && !isWindows,
 		frame: DEV,
+		// On Windows, certain window style combos can lose the resize border on newer Electron.
+		// Keeping a thick frame restores edge resizing (and helps Aero snapping).
+		thickFrame: isWindows,
 		sandbox: false,
 		icon: path.join(__dirname, 'assets/images', 'app-icon.png'),
-		setBackgroundColor: '#0E2144',
+		backgroundColor: '#0E2144',
 		webPreferences: {
 			nodeIntegration: true,
 			contextIsolation: true,
@@ -293,6 +299,22 @@ app.on('window-all-closed', () => {
 ipcMain.on('open-file', (event, filePath) => {
 	// Show the given file in a file manager. If possible, select the file.
 	shell.showItemInFolder(filePath);
+});
+
+// Open external links in the user's default browser.
+// This prevents target=_blank from creating in-app windows.
+ipcMain.on('open-external', (event, url) => {
+	if (typeof url !== 'string' || !url.trim()) return;
+
+	let parsed;
+	try {
+		parsed = new URL(url);
+	} catch {
+		return;
+	}
+
+	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+	shell.openExternal(parsed.toString());
 });
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));

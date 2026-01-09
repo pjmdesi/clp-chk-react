@@ -1,7 +1,7 @@
 {
     "name": "clp-chk-react",
     "productName": "ClpChk",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "Compare versions of videos and photos side-by-side.",
     "main": ".webpack/main",
     "scripts": {
@@ -10,6 +10,8 @@
         "package": "electron-forge package",
         "make": "electron-forge make",
         "publish": "electron-forge publish",
+        "generate:third-party-notices": "node ./scripts/generate-third-party-notices.js",
+        "generate:third-party-licenses": "node ./scripts/generate-third-party-licenses.js",
         "lint": "echo \"No linting configured\""
     },
     "devDependencies": {
