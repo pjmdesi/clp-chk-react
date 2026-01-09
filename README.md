@@ -6,8 +6,8 @@ I developed this tool to help with my own media analysis. I found no way to quic
 
 This is a relatively simple web app based on React & Electron. I will be adding features & fixing bugs as I have time.
 
-![App Screenshot](https://github.com/pjmdesi/clp-chk-react/blob/feb5b3c913729fd21f7c112a6e27c2965d03e3af/src/assets/images/app-screenshot.png)
-![App Recording](https://github.com/pjmdesi/clp-chk-react/blob/feb5b3c913729fd21f7c112a6e27c2965d03e3af/src/assets/images/app-recording.gif)
+![App Screenshot](https://github.com/pjmdesi/clp-chk-react/blob/e3df210f608ab248912cc9c1bbefb8391f163086/src/assets/images/app-screenshot.png)
+![App Recording](https://github.com/pjmdesi/clp-chk-react/blob/e3df210f608ab248912cc9c1bbefb8391f163086/src/assets/images/app-recording.gif)
 
 ## Features
 
