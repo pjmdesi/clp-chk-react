@@ -1,0 +1,4 @@
+Package: @rabbitholesyndrome/electron-forge-maker-portable
+Version: 0.2.0
+License field: UNKNOWN
+NPM: https://www.npmjs.com/package/%40rabbitholesyndrome%2Felectron-forge-maker-portable
