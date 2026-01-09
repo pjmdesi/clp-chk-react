@@ -3,7 +3,7 @@
 This folder is generated and contains LICENSE/NOTICE files copied from third-party npm packages used by this repo.
 If a package does not ship a license file in its npm tarball, it may not appear here even though it is listed in THIRD_PARTY_NOTICES.md.
 
-Generated: 2026-01-09T08:17:29.420Z
+Generated: 2026-01-09T08:55:47.595Z
 
 - @babel/core (7.28.5): LICENSE, license
 - @babel/preset-react (7.28.5): LICENSE, license
