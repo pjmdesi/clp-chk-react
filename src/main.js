@@ -218,7 +218,7 @@ const createWindow = () => {
 		thickFrame: isWindows,
 		sandbox: false,
 		icon: path.join(__dirname, 'assets/images', 'app-icon.png'),
-		backgroundColor: '#0E2144',
+		backgroundColor: '#00000000',
 		webPreferences: {
 			nodeIntegration: true,
 			contextIsolation: true,
@@ -306,8 +306,8 @@ ipcMain.on('open-file', (event, filePath) => {
 ipcMain.handle('pick-media-file', async () => {
 	if (!mainWindow || mainWindow.isDestroyed()) return null;
 	const result = await dialog.showOpenDialog(mainWindow, {
-		title: 'Choose a media file',
-		properties: ['openFile'],
+		title: 'Choose media file(s)',
+		properties: ['openFile', 'multiSelections'],
 		filters: [
 			{
 				name: 'Media Files',
@@ -318,6 +318,24 @@ ipcMain.handle('pick-media-file', async () => {
 	});
 	if (result.canceled) return null;
 	return Array.isArray(result.filePaths) && result.filePaths[0] ? result.filePaths[0] : null;
+});
+
+// Renderer requests a native file picker and receives an array of absolute filesystem paths.
+ipcMain.handle('pick-media-files', async () => {
+	if (!mainWindow || mainWindow.isDestroyed()) return [];
+	const result = await dialog.showOpenDialog(mainWindow, {
+		title: 'Choose media file(s)',
+		properties: ['openFile', 'multiSelections'],
+		filters: [
+			{
+				name: 'Media Files',
+				extensions: ['mp4', 'avi', 'mov', 'mpeg', 'mkv', 'webm', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'],
+			},
+			{ name: 'All Files', extensions: ['*'] },
+		],
+	});
+	if (result.canceled) return [];
+	return Array.isArray(result.filePaths) ? result.filePaths : [];
 });
 
 // Open external links in the user's default browser.

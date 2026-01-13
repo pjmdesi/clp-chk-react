@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('api', {
 	openFile: filePath => ipcRenderer.send('open-file', filePath),
 	openExternal: url => ipcRenderer.send('open-external', url),
 	pickMediaFile: () => ipcRenderer.invoke('pick-media-file'),
+	pickMediaFiles: () => ipcRenderer.invoke('pick-media-files'),
 	resizeWindow: dimensions => {
         console.log(`Setting dimensions to: ${dimensions.width}, ${dimensions.height}`);
         ipcRenderer.send('resize-window', dimensions)

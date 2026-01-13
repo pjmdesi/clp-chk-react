@@ -1,35 +1,46 @@
 import React from 'react';
 
-function MediaInfo({ mediaData }) {
+function MediaInfo({ mediaMetaData, mediaType, ...props }) {
+    const maxPathLength = 120;
+
 	return (
 		<>
 			<h4>
 				<b>File Name:</b>
 				<br />
-				{mediaData.mediaMetaData ? mediaData.mediaMetaData.fileName : 'N/A'}
+				{mediaMetaData ? mediaMetaData.fileName : 'N/A'}
 			</h4>
 			<h5>
 				<br />
-				<b>Duration:</b>
+				<b>File Path:</b>
 				<br />
-				{mediaData.mediaMetaData && typeof mediaData.mediaMetaData.duration === 'number' ? `${mediaData.mediaMetaData.duration.toFixed(2)} seconds` : 'N/A'}
-				<br />
-				<br />
-				<b>Resolution:</b>
-				<br />
-				{mediaData.mediaMetaData && mediaData.mediaMetaData.width && mediaData.mediaMetaData.height
-					? `${mediaData.mediaMetaData.width} x ${mediaData.mediaMetaData.height}`
-					: 'N/A'}
-				<br />
-				<br />
-				<b>Framerate</b>
-				<br />
-				{mediaData.mediaMetaData && typeof mediaData.mediaMetaData.framerate === 'number' ? `${mediaData.mediaMetaData.framerate.toFixed(2)} fps` : 'N/A'}
+				{mediaMetaData && typeof mediaMetaData.filePath === 'string' ? (mediaMetaData.filePath.length > maxPathLength ? `...${mediaMetaData.filePath.slice(-maxPathLength + 3)}` : mediaMetaData.filePath) : 'N/A'}
 				<br />
 				<br />
 				<b>File Size:</b>
 				<br />
-				{mediaData.mediaMetaData && typeof mediaData.mediaMetaData.fileSize === 'number' ? `${(mediaData.mediaMetaData.fileSize / (1024 * 1024)).toFixed(2)} MB` : 'N/A'}
+				{mediaMetaData && typeof mediaMetaData.fileSize === 'number' ? `${(mediaMetaData.fileSize / (1024 * 1024)).toFixed(2)} MB` : 'N/A'}
+				<br />
+				<br />
+				<b>Resolution:</b>
+				<br />
+				{mediaMetaData && mediaMetaData.width && mediaMetaData.height
+					? `${mediaMetaData.width} x ${mediaMetaData.height}`
+					: 'N/A'}
+				{mediaType === 'video' && (
+					<>
+						<br />
+						<br />
+						<b>Duration:</b>
+						<br />
+						{mediaMetaData && typeof mediaMetaData.duration === 'number' ? `${mediaMetaData.duration.toFixed(2)} seconds` : 'N/A'}
+						<br />
+						<br />
+						<b>Framerate</b>
+						<br />
+						{mediaMetaData && typeof mediaMetaData.framerate === 'number' ? `${mediaMetaData.framerate.toFixed(2)} fps` : 'N/A'}
+					</>
+				)}
 			</h5>
 		</>
 	);

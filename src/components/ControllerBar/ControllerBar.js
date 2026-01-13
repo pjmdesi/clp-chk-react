@@ -7,7 +7,8 @@ import PlayerToggle from '../PlayerToggle/PlayerToggle';
 import Icon from '../Icon';
 import UserSettingsControl from '../UserSettingsControl';
 import { secondsToTimecode } from '../../utils/timecode';
-import HelpDocumentation from '../HelpDocumentation/HelpDocumentation';
+import HelpDocumentation from '../HelpDocumentation';
+import KeyboardShortcuts from '../KeyboardShortcuts';
 
 function ControllerBar({
 	defaultAppSettings,
@@ -18,6 +19,8 @@ function ControllerBar({
 	setAppSettings,
 	toolSettingsRef,
 	appSettingsRef,
+	keyboardControlsRef,
+	setKeyboardControls,
 	playbackStatus,
 	unifiedMediaDimensions,
 	setUnifiedMediaDimensions,
@@ -32,9 +35,15 @@ function ControllerBar({
 	isInElectron,
 	setCurrentModal,
 }) {
-	const [hasAnyVideo, setHasAnyVideo] = React.useState(false);
-	const [hasBothMedia, setHasBothMedia] = React.useState(!!leftMedia && !!rightMedia);
-	const [windowIsSmallerThanMedia, setWindowIsSmallerThanMedia] = React.useState(null);
+	const [hasAnyVideo, setHasAnyVideo] = React.useState(false),
+		[hasBothMedia, setHasBothMedia] = React.useState(!!leftMedia && !!rightMedia),
+		[windowIsSmallerThanMedia, setWindowIsSmallerThanMedia] = React.useState(null),
+		[longerVideoDuration, setLongerVideoDuration] = React.useState(0),
+		[shorterVideoDuration, setShorterVideoDuration] = React.useState(0),
+		[longerVideoSide, setLongerVideoSide] = React.useState('Left'),
+		[shorterVideoSide, setShorterVideoSide] = React.useState('Right'),
+		[shorterVideoStartTime, setShorterVideoStartTime] = React.useState(0),
+		[timelineSliderTicks, setTimelineSliderTicks] = React.useState({});
 
 	const updateToolSettings = (newSettingVal, setting) => {
 		const newSettings = { ...toolSettings };
@@ -195,14 +204,14 @@ function ControllerBar({
 			action: () => updateToolSettings('boxCutout', 'toolMode'),
 			optionSet: {},
 		},
-        overlay: {
-            name: 'overlay',
-            value: 'overlay',
-            icon: 'Layers2',
-            label: 'Overlay',
-            action: () => updateToolSettings('overlay', 'toolMode'),
-            optionSet: {},
-        },
+		overlay: {
+			name: 'overlay',
+			value: 'overlay',
+			icon: 'Layers2',
+			label: 'Overlay',
+			action: () => updateToolSettings('overlay', 'toolMode'),
+			optionSet: {},
+		},
 	};
 
 	const playerSpeedSet = {
@@ -277,8 +286,41 @@ function ControllerBar({
 	React.useEffect(() => {
 		setHasAnyVideo(leftMediaType === 'video' || rightMediaType === 'video');
 		setHasBothMedia(!!leftMediaMetaData && !!rightMediaMetaData);
-		mediaVsContainerSizeCheck();
 
+		const longerVideoDur = Math.max(leftMediaMetaData?.duration || 0, rightMediaMetaData?.duration || 0),
+			shorterVideoDur = Math.min(leftMediaMetaData?.duration || Infinity, rightMediaMetaData?.duration || Infinity),
+			longerVideoSd = leftMediaMetaData?.duration >= rightMediaMetaData?.duration ? 'Left' : 'Right',
+			shorterVideoSd = leftMediaMetaData?.duration < rightMediaMetaData?.duration ? 'Left' : 'Right';
+
+		setLongerVideoDuration(longerVideoDur);
+		setShorterVideoDuration(shorterVideoDur);
+		setLongerVideoSide(longerVideoSd);
+		setShorterVideoSide(shorterVideoSd);
+
+		const newTimelineSliderTicks = {};
+
+		if (leftMediaMetaData?.duration === rightMediaMetaData?.duration) {
+			newTimelineSliderTicks['videoStart'] = { value: 0, title: `Video Start (0:00:00.00)` };
+			newTimelineSliderTicks['videoEnd'] = { value: longerVideoDur, title: `Video End (${secondsToTimecode(longerVideoDur, framerate)})` };
+		} else {
+			newTimelineSliderTicks['longerVideoStart'] = { value: 0, title: `Video Start (0:00:00.00)` };
+			newTimelineSliderTicks['longerVideoEnd'] = { value: longerVideoDur, title: `Longer Video End (${longerVideoSd}) | ${secondsToTimecode(longerVideoDur, framerate)}` };
+			newTimelineSliderTicks['shorterVideoEnd'] = {
+				value: shorterVideoDur,
+				title: `Shorter Video End (${shorterVideoSd}) | ${secondsToTimecode(shorterVideoDur, framerate)}`,
+			};
+
+			if (shorterVideoStartTime > 0) {
+				newTimelineSliderTicks['shorterVideoStart'] = {
+					value: shorterVideoStartTime,
+					title: `Shorter Video Start (${secondsToTimecode(shorterVideoStartTime, framerate)})`,
+				};
+			}
+		}
+
+		setTimelineSliderTicks(newTimelineSliderTicks);
+
+		mediaVsContainerSizeCheck();
 	}, [mainContainerSize, leftMediaMetaData, rightMediaMetaData, toolSettings.controllerBarOptions.floating]);
 
 	return (
@@ -300,6 +342,8 @@ function ControllerBar({
 						PlayerControls.pause();
 						PlayerControls.setIsScrubbing(true);
 					}}
+					snapToTicks={false}
+					ticks={timelineSliderTicks}
 					onChangeComplete={time => {
 						// First turn off scrubbing, then resume if needed
 						setTimeout(() => {
@@ -364,29 +408,37 @@ function ControllerBar({
 							label="px"
 						/>
 					)}
-                    {toolSettings.toolMode === 'overlay' && (
-                        <PlayerSlider
-                            defaultSliderValue={0.5}
-                            id="overlayOpacitySlider"
-                            name="Overlay Opacity"
-                            sliderMinMax={[0, 1]}
-                            stepValue={0.01}
-                            snapThreshold={0.05}
-                            ticks={{
-                                default: { value: defaultToolSettings.toolOptions.value['overlay'], title: `Default Blend` },
-                            }}
-                            snapToTicks={true}
-                            value={toolSettings.toolOptions.value['overlay']}
-                            onChange={updateToolSettingOptionsValue}
-                            option={'overlay'}
-                            label=""
-                            valueFormatter={val => `${Math.round(val * 100)}%`}
-                        />
-                    )}
+					{toolSettings.toolMode === 'overlay' && (
+						<PlayerSlider
+							defaultSliderValue={0.5}
+							id="overlayOpacitySlider"
+							name="Overlay Opacity"
+							sliderMinMax={[0, 1]}
+							stepValue={0.01}
+							snapThreshold={0.05}
+							ticks={{
+								default: { value: defaultToolSettings.toolOptions.value['overlay'], title: `Default Blend` },
+							}}
+							snapToTicks={true}
+							value={toolSettings.toolOptions.value['overlay']}
+							onChange={updateToolSettingOptionsValue}
+							option={'overlay'}
+							label=""
+							valueFormatter={val => `${Math.round(val * 100)}%`}
+						/>
+					)}
 				</div>
 			</div>
 			{hasAnyVideo && (
 				<div className="control-group">
+					<div className="control-subgroup">
+						{toolSettings.playerSpeed === 8 && (
+							<button title="Warning: 8x speed might cause performance issue such as de-sync and frame skipping" disabled>
+								<Icon name="TriangleAlert" color="yellow" />
+							</button>
+						)}
+						<PlayerRadioButtons id="playerSpeedButtonSet" buttonSet={playerSpeedSet} value={toolSettings.playerSpeed} autoFold />
+					</div>
 					<div className="control-subgroup">
 						<PlayerControl id="skipBackButton" iconName="SkipBack" onClick={() => PlayerControls.setCurrentTime(0)} title="Jump to Start of Video timeline" />
 						<PlayerControl
@@ -423,12 +475,6 @@ function ControllerBar({
 							option="playerLoop"
 							title="Loop Videos"
 						/>
-						<PlayerRadioButtons id="playerSpeedButtonSet" buttonSet={playerSpeedSet} value={toolSettings.playerSpeed} autoFold />
-						{toolSettings.playerSpeed === 8 && (
-							<button title="Warning: 8x speed might cause performance issue such as de-sync and frame skipping" disabled>
-								<Icon name="TriangleAlert" color="yellow" />
-							</button>
-						)}
 					</div>
 				</div>
 			)}
@@ -471,20 +517,40 @@ function ControllerBar({
 					}}>
 					<Icon name="Settings" />
 				</button>
-                <button id="helpModalButton"
-                    title="Open Help / Documentation"
-                    onClick={() => {
-                        if (!setCurrentModal) {
-                            return;
-                        }
-                        setCurrentModal({
-                            key: 'help',
-                            title: 'Help / Documentation',
+				<button
+					id="keyboardShortcutsModalButton"
+					title="Open Keyboard Shortcuts"
+					onClick={() => {
+						if (!setCurrentModal) {
+							return;
+						}
+						setCurrentModal({
+							key: 'keyboardShortcuts',
+							title: 'Keyboard Shortcuts',
+							component: KeyboardShortcuts,
+							props: {
+								keyboardControlsRef,
+								setKeyboardControls,
+							},
+						});
+					}}>
+					<Icon name="Keyboard" />
+				</button>
+				<button
+					id="helpModalButton"
+					title="Open Help / Documentation"
+					onClick={() => {
+						if (!setCurrentModal) {
+							return;
+						}
+						setCurrentModal({
+							key: 'help',
+							title: 'Help / Documentation',
 							component: HelpDocumentation,
-                        });
-                    }}>
-                    <Icon name="CircleQuestionMark" />
-                </button>
+						});
+					}}>
+					<Icon name="CircleQuestionMark" />
+				</button>
 			</div>
 		</div>
 	);

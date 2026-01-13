@@ -6,7 +6,7 @@
 	flex-direction: column;
 	gap: calc(4 * var(--spacing));
 	padding: var(--root-padding);
-	background-color: var(--dark-blue);
+	background-color: var(--background);
 	border-radius: var(--radius);
 
 	box-shadow: $bevel-shadow-sink-in;
@@ -55,6 +55,14 @@
 
 		height: var(--btnSize);
 		padding: var(--spacing);
+
+        transition: background var(--default-timing), box-shadow var(--default-timing) ease-in-out;
+
+        &:hover,
+        &:focus,
+        &:focus-within {
+            background-color: rgba(var(--white-rgb), 0.15);
+        }
 	}
 
 	.control-checkbox-container,
@@ -63,7 +71,6 @@
 		gap: var(--spacing);
 		padding: var(--spacing);
 		justify-content: center;
-		background-color: var(--dark-blue);
 		border-radius: var(--radius);
 
 		box-shadow: $bevel-shadow-sink-in;
@@ -75,7 +82,7 @@
 
 			&:has(input[type='checkbox']:checked) {
 				box-shadow: $bevel-shadow-pop-out;
-				background: var(--pink);
+				background: var(--prime);
 			}
 
 			> .lucide {
@@ -142,7 +149,7 @@
 
 			&:has(input[type='radio']:checked) {
 				box-shadow: $bevel-shadow-pop-out;
-				background: var(--pink);
+				background: var(--prime);
 			}
 
 			> .lucide {
@@ -151,35 +158,5 @@
 				height: calc(var(--btnSize) - 2 * var(--spacing));
 			}
 		}
-	}
-}
-
-button[class*='-closer'] {
-	background: transparent !important;
-
-	color: var(--white);
-	svg {
-		fill: currentColor;
-		stroke: currentColor;
-	}
-
-    box-shadow: none !important;
-
-	filter: drop-shadow(0 0 0.125rem var(--black));
-	cursor: pointer;
-
-	transform: scale(1);
-	transition:
-		transform 0.15s ease-in-out,
-		stroke 0.15s ease-in-out,
-		color 0.15s ease-in-out,
-		filter 0.15s ease-in-out;
-
-	z-index: 4;
-
-	&:hover {
-		color: var(--pink);
-		filter: drop-shadow(0 0 0.25rem var(--pink));
-		transform: scale(1.25);
 	}
 }

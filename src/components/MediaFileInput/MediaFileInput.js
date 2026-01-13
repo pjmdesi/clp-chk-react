@@ -19,40 +19,77 @@ const toFileUrl = filePath => {
 	return null;
 };
 
-function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
+function MediaFileInput({
+	setMediaFile,
+	setSecondaryMediaFile,
+	mediaKey,
+	isInElectron,
+	isInBrowser,
+	onMissingFilePath,
+	onHasFilePath,
+	onSecondaryMissingFilePath,
+	onSecondaryHasFilePath,
+	onTooManyFilesSelected,
+}) {
 	const [isDragging, setIsDragging] = React.useState(false);
 
 	const handleElectronPick = async e => {
 		e?.preventDefault?.();
 		if (!isInElectron) return;
-		if (!window?.api?.pickMediaFile) {
-			console.warn('[MediaFileInput] window.api.pickMediaFile is not available.');
+		const pickMany = window?.api?.pickMediaFiles;
+		const pickOne = window?.api?.pickMediaFile;
+		if (!pickMany && !pickOne) {
+			console.warn('[MediaFileInput] No Electron file picker API is available.');
 			return;
 		}
 
 		try {
-			const filePath = await window.api.pickMediaFile();
-			if (!filePath) return;
+			let filePaths = [];
+			if (pickMany) {
+				filePaths = await pickMany();
+			} else if (pickOne) {
+				const single = await pickOne();
+				filePaths = single ? [single] : [];
+			}
+			if (!Array.isArray(filePaths) || filePaths.length === 0) return;
 
-			const fileUrl = toFileUrl(filePath);
-			if (!fileUrl) {
-				console.warn('[MediaFileInput] Could not convert picked path to file URL.');
-				return;
+			if (filePaths.length > 2) {
+				onTooManyFilesSelected?.(filePaths.length);
+			} else {
+				onTooManyFilesSelected?.(0);
 			}
 
-			const fileName = filePath.split(/[/\\]/).pop();
-			const ext = (fileName || '').split('.').pop()?.toLowerCase() || '';
-			const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
-			const mediaType = isImage ? 'image' : 'video';
+			const loadPath = (filePath, setFn, onHas, onMissing) => {
+				if (typeof filePath !== 'string' || !filePath.trim()) {
+					onMissing?.();
+					return;
+				}
+				const fileUrl = toFileUrl(filePath);
+				if (!fileUrl) {
+					onMissing?.();
+					return;
+				}
 
-			saveFileMetadata(fileUrl, {
-				fileName,
-				filePath,
-				mediaType,
-				fileSize: null,
-			});
+				const fileName = filePath.split(/[/\\]/).pop();
+				const ext = (fileName || '').split('.').pop()?.toLowerCase() || '';
+				const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
+				const mediaType = isImage ? 'image' : 'video';
 
-			setMediaFile(fileUrl);
+				saveFileMetadata(fileUrl, {
+					fileName,
+					filePath,
+					mediaType,
+					fileSize: null,
+				});
+
+				onHas?.();
+				setFn?.(fileUrl);
+			};
+
+			loadPath(filePaths[0], setMediaFile, onHasFilePath, onMissingFilePath);
+			if (filePaths[1] && setSecondaryMediaFile) {
+				loadPath(filePaths[1], setSecondaryMediaFile, onSecondaryHasFilePath, onSecondaryMissingFilePath);
+			}
 		} catch (error) {
 			console.error('[MediaFileInput] Error picking media file:', error);
 		}
@@ -131,11 +168,15 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 					fileSize: typeof file.size === 'number' ? file.size : null,
 				});
 
+				onHasFilePath?.();
 				setMediaFile(fileUrl);
 			} catch (error) {
 				console.error('[MediaFileInput] Error creating blob from file:', error);
 			}
 		} else {
+			if (isInElectron) {
+				onMissingFilePath?.();
+			}
 			// Fallback for browsers without File System Access API (or Electron if File.path is not present)
 			const blobUrl = URL.createObjectURL(file);
 
@@ -189,28 +230,28 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 				return;
 			}
 
-			// Process the file (reuse the same logic as file input)
+			// Electron: prefer using a file:// URL so we can persist/restore the real filesystem path.
 			if (isInElectron && file.path) {
 				try {
-					const arrayBuffer = await file.arrayBuffer();
-					const blob = new Blob([arrayBuffer], { type: file.type || 'video/mp4' });
-					const blobUrl = URL.createObjectURL(blob);
-
+					const fileUrl = toFileUrl(file.path);
+					if (!fileUrl) throw new Error('Failed to convert dropped file.path to file:// URL');
 					const mediaType = file.type.startsWith('image/') ? 'image' : 'video';
-
-					saveFileMetadata(blobUrl, {
+					saveFileMetadata(fileUrl, {
 						fileName: file.name,
 						filePath: file.path,
 						mediaType: mediaType,
 						fileSize: typeof file.size === 'number' ? file.size : null,
 					});
-
-					setMediaFile(blobUrl);
+					onHasFilePath?.();
+					setMediaFile(fileUrl);
 				} catch (error) {
 					console.error('[MediaFileInput] Error creating blob from dropped file:', error);
 				}
 			} else {
-				// Browser mode
+				if (isInElectron) {
+					onMissingFilePath?.();
+				}
+				// Browser mode (or Electron where dropped File.path is unavailable): cannot persist a real path.
 				const blobUrl = URL.createObjectURL(file);
 				const mediaType = file.type.startsWith('image/') ? 'image' : 'video';
 
@@ -245,7 +286,7 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 					accept="video/*, image/*"
 					onChange={setMediaFileFromInput}
 					style={
-						(isInBrowser && window.showOpenFilePicker) || (isInElectron && window?.api?.pickMediaFile)
+						(isInBrowser && window.showOpenFilePicker) || (isInElectron && (window?.api?.pickMediaFiles || window?.api?.pickMediaFile))
 							? { display: 'none' }
 							: undefined
 					}
@@ -266,7 +307,7 @@ function MediaFileInput({ setMediaFile, mediaKey, isInElectron, isInBrowser }) {
 				)}
 
 				{/* Clickable overlay for Electron native picker */}
-				{isInElectron && window?.api?.pickMediaFile && (
+				{isInElectron && (window?.api?.pickMediaFiles || window?.api?.pickMediaFile) && (
 					<div
 						className="file-input-overlay"
 						onClick={handleElectronPick}

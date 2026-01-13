@@ -31,7 +31,7 @@ export const userSettingsSections = [
 				control: 'slider',
 				label: 'Minimum zoom',
                 description: 'Sets the minimum zoom level allowed in the media viewer.',
-				min: 0.01,
+				min: 0.05,
 				max: 1,
 				step: 0.05,
 				unit: 'x',

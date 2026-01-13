@@ -2,21 +2,10 @@
 
 (_Items are kind of in priority order for each section_)
 
-
-DO THIS NEXT:
-
-* Create test media that has different sizes to test functionality
-* Change clipper size calculation to use absolute rounded pixels instead of percentages to avoid sub-pixel rendering issues
-* Tick marks on sliders are slightly off for some reason.
-* Tool size shortcut needs to adapt to the specific slider's step value
-
 ## UI
 
 ### Bugs / Issues (UI)
 
-* Need to account vertical video
-  * Zoom to fit height instead of width when video is taller than wide
-  * same with resizing window
 * Minimum window size for Electron app doesn't quite match that of the internal web app container minimum size
 
 #### MacOS Specific
@@ -46,38 +35,11 @@ DO THIS NEXT:
 
 ### Features (UI)
 
-* ~~Add opacity overlay option for clipper tool (opacity slider for settings)~~ (1/8/25)
-* Double click the mediaContainer to reset the position of the clipper.
-* Add slider to control volume for each vid (maybe scroll on volume button fills in button outline?)
-* Add warning when videos are not the same ratio / length
-* (?) If videos are different lengths:
-  * Allow timeline track to indicate where the shorter one ends
-  * Allow user to pick whether black or last frame is shown
-* Add settings panel
-  * Allow swapping vertical scroll and horizontal scroll functions (vertical scroll = zoom | horizontal scroll = scrub <-> vertical scroll = scrub | horizontal scroll = zoom) [ use event listener: _**onwheel**_ and use x & y coordinates to distinguish between the 2 ]
-  * Invert zoom direction
-  * Smooth Zoom (animate between zoom ticks)
-  * Auto load last videos toggle
-  * Zoom minimums and maximums
-  * Lock zoom on resize toggle
 * Add notes overlay
 * Allow user to switch between time elapsed / time remaining display on timecode
-* Create info page for controls and keyboard shortcuts, maybe inside settings panel
-* add warning to indicate if different framerate
-* Keyboard controls
-  * Frame stepping
-  * Zoom in/out
-  * Tool mode switching
-  * Tool option adjustments
-    * Cutout size
-    * Divider auto on/off (when fixed)
-    * Divider auto speed (when fixed)
-  * (?) Panning controls
-  * (?) Clipper position controls
-  * (?) Clipper lock toggle
-  * (?) Reset zoom/offset
+* add warning to indicate if different videos have framerates
 * Change remaining input to list different detected versions of the loaded file after one is added to a pane. It should still work as regular file picker input as well
-* Display audio waveform to indicate which / how loud each video is playing. [source](https://css-tricks.com/making-an-audio-waveform-visualizer-with-vanilla-javascript/)
+* (Maybe) Display audio waveform to indicate which / how loud each video is playing. [source](https://css-tricks.com/making-an-audio-waveform-visualizer-with-vanilla-javascript/)
 * Show errors
   * When unsupported file type is loaded
   * When file fails to load for any reason
@@ -93,10 +55,10 @@ DO THIS NEXT:
 ### Bugs / Issues (app)
 
 * File compatibility issues | I need to add a check for several issues the user might run into while using this app. Here's a list of things I've thought of so far:
-    1. They might choose video files of different lengths. If they do, I need to display an warning that says this, but the app should still work. The timecode slider should proceed past the shorter video file (displaying the last frame) until it reaches the end of the longer video.
-    2. along the same lines, if the video files have different framrates, the timecode slider should display that of the larger framerate.
-    3. If the user inputs files of different dimesnions, they should still match in size, adjusting the smaller one to match that of the larger one.
-    4. If the user inputs a video file in one panel, and an image in the other, the second input should be refused (it should match whatever was first).
+    1. along the same lines, if the video files have different framerates, the timecode slider should display that of the larger framerate.
+    2. If the user inputs a video file in one panel, and an image in the other, the second input should be refused (it should match whatever was first).
+    3. ~~They might choose video files of different lengths. If they do, I need to display an warning that says this, but the app should still work. The timecode slider should proceed past the shorter video file (displaying the last frame) until it reaches the end of the longer video.~~
+    4. ~~If the user inputs files of different dimensions, they should still match in size, adjusting the smaller one to match that of the larger one.~~
 
 ### Features (app)
 
@@ -106,12 +68,24 @@ DO THIS NEXT:
 * Allow for rendering of comparison media to file. _No idea how to do that..._ [Maybe this?](https://dev.to/yonatanbd/using-electron-to-create-videos-canvas-ffmpeg-5gdm)
   * Images should render to jpg or allow user to choose format in settings
   * Videos should render to mp4 or allow user to choose format in settings
-* Add ability to open files via file browser context menu (right-click on file -> Open with -> select app)
+* (Maybe, might require installation, otherwise users can do this themselves) Add ability to open files via file browser context menu (right-click on file -> Open with -> select app)
 
 ---
 
 ### Complete
 
+* ~~Add opacity overlay option for clipper tool (opacity slider for settings)~~ (1/8/25)
+* ~~Double click the mediaContainer to reset the position of the clipper.~~ (1/13/25)
+* ~~Add slider to control volume for each vid (maybe scroll on volume button fills in button outline?)~~ (1/13/25)
+* ~~Add warning when videos are not the same ratio / length~~
+* ~~(?) If videos are different lengths:~~
+  * ~~Allow timeline track to indicate where the shorter one ends~~
+* ~~Add settings panel~~
+  * ~~Allow swapping vertical scroll and horizontal scroll functions (vertical scroll = zoom | horizontal scroll = scrub <-> vertical scroll = scrub | horizontal scroll = zoom) [ use event listener: _**onwheel**_ and use x & y coordinates to distinguish between the 2 ]~~
+  * ~~Invert zoom direction~~
+  * ~~Auto load last videos toggle~~
+  * ~~Zoom minimums and maximums~~
+* ~~Create info page for controls and keyboard shortcuts, maybe inside settings panel~~
 * ~~Only run the clip lock/unlock when clicking inside the video area when the window is focused. Otherwise, clicking outside the window and back in causes an unwanted toggle of the lock state.~~ (1/8/25)
 * ~~Add snap points to zoom slider~~ (1/8/25)
 * ~~Fit to window and fill window snap points need to be labelled in the zoom info overlay (also make sure all naming for that overlay is updated to indicate it's only for zooming)~~ (1/8/25)

@@ -1,0 +1,11 @@
+@use 'sass:color';
+@use 'variables' as *;
+
+@mixin floating-tools-style {
+    background-color: rgba($color: var(--background-rgb), $alpha: 0.75);
+    box-shadow:
+        0 3px var(--root-padding) rgba($color: var(--white-rgb), $alpha: 0.1) inset,
+        0 -3px var(--root-padding) rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+    backdrop-filter: blur(var(--root-padding));
+    border-radius: calc(var(--radius) + var(--spacing));
+}

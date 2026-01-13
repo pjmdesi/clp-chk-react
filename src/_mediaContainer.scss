@@ -1,3 +1,6 @@
+@use '_variables' as *;
+@use '_mixins' as *;
+
 #mediaContainer {
 	--controller-offset: 40px;
 
@@ -77,19 +80,19 @@
 	}
 
 	&:has(#videoClipper.auto) {
-        cursor: default;
-    }
+		cursor: default;
+	}
 
 	&.zoom-out-anim {
 		transform: scale(1.005);
 		border-radius: 13px;
-		box-shadow: 0 0 4px 4px rgba($color: var(--pink-rgb), $alpha: 1);
+		box-shadow: 0 0 4px 4px rgba($color: var(--prime-rgb), $alpha: 1);
 	}
 
 	&.zoom-in-anim {
 		transform: scale(0.994, 0.989);
 		border-radius: 0;
-		box-shadow: 0 0 4px 3px rgba($color: var(--pink-rgb), $alpha: 1);
+		box-shadow: 0 0 4px 3px rgba($color: var(--prime-rgb), $alpha: 1);
 	}
 
 	label.file-input {
@@ -119,13 +122,7 @@
 		width: var(--input-size);
 		height: var(--input-size);
 
-		background: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
-		box-shadow:
-			inset 0px 3px 8px rgba(255, 255, 255, 0.1),
-			inset 0px -3px 8px rgba(0, 0, 0, 0.25);
-		backdrop-filter: blur(4px);
-		/* Note: backdrop-filter has minimal browser support */
-		border-radius: 16px;
+		@include floating-tools-style;
 
 		appearance: none;
 
@@ -146,7 +143,7 @@
 		}
 
 		&:hover {
-			background: rgba($color: var(--darker-blue-rgb), $alpha: 1);
+			background: rgba($color: var(--background-rgb), $alpha: 1);
 		}
 	}
 
@@ -183,11 +180,11 @@
 			z-index: 4;
 		}
 
-        &.auto {
-            #clipperLock {
-                display: none;
-            }
-        }
+		&.auto {
+			#clipperLock {
+				display: none;
+			}
+		}
 
 		&.empty {
 			background: var(--black);
@@ -308,32 +305,34 @@
 		display: contents;
 	}
 
+    img,
+    video {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain;
+        background: var(--black);
+        border: none;
+        outline: none;
+        box-shadow: 0 1px 5px 0px rgba($color: var(--gray6-rgb), $alpha: 0.8);
+    }
+
 	// Native video elements (fallback)
 	// Images inside wrappers shouldn't have hardcoded positioning - let the wrapper handle it
 	video {
 		position: absolute !important;
 		left: 0 !important;
 		top: 0 !important;
-		width: 100% !important;
-		height: 100% !important;
-		display: block;
-		object-fit: contain;
-		background: var(--black);
-		border: none;
-		outline: none;
-		box-shadow: 0 1px 5px 0px rgba($color: var(--gray5-rgb), $alpha: 0.8);
+
+        transition: box-shadow var(--default-timing) ease-in-out;
 	}
 
-	// Images need to fill their wrapper and allow dynamic transforms
-	img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-		background: var(--black);
-		border: none;
-		outline: none;
-		box-shadow: 0 1px 5px 0px rgba($color: var(--gray5-rgb), $alpha: 0.8);
+	.video-js {
+		&.vjs-playing {
+			video {
+                box-shadow: 0 1px 7px 0px rgba($color: var(--prime-rgb), $alpha: 0.8);
+			}
+		}
 	}
 
 	#videoClipper .videojs-wrapper,
@@ -362,76 +361,6 @@
 		.vjs-error-display,
 		.vjs-modal-dialog {
 			display: none !important;
-		}
-	}
-}
-
-#validationMessage {
-	position: absolute;
-	inset: 72px auto auto 50%;
-
-	display: flex;
-	flex-direction: column;
-	gap: calc(4 * var(--spacing));
-	padding: var(--root-padding);
-
-	color: var(--message-color);
-	font-size: 1rem;
-	font-weight: 500;
-	background-color: var(--dark-blue);
-	border-radius: calc(var(--radius) + var(--spacing));
-	transform: translateX(-50%);
-
-	box-shadow:
-		0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
-		0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
-
-	backdrop-filter: blur(var(--controller-spacing));
-
-	height: auto;
-	max-width: calc(50% - 2rem);
-
-	#mainContainer.floating-tools & {
-		background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
-		opacity: 0;
-	}
-
-	#mainContainer:hover &,
-	#mainContainer:focus-within & {
-		opacity: 1;
-		transition:
-			opacity var(--default-timing) linear 0s,
-			inset var(--default-timing) ease-in-out 0s,
-			padding var(--default-timing) ease-in-out 0s,
-			var(--default-timing) ease-in-out 0s,
-			border-radius var(--default-timing) ease-in-out 0s;
-	}
-
-	.validation-warning {
-		--message-color: var(--white);
-
-		display: flex;
-		gap: calc(4 * var(--spacing));
-		align-items: center;
-
-		&.error {
-			--message-color: var(--pink);
-		}
-
-		&.warning {
-			--message-color: var(--caution);
-		}
-
-		&.info {
-			--message-color: var(--info);
-		}
-
-		svg {
-			flex-shrink: 0;
-		}
-
-		span {
-			flex: 1;
 		}
 	}
 }

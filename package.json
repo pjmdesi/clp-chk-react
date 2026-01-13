@@ -1,7 +1,7 @@
 {
     "name": "clp-chk-react",
     "productName": "ClpChk",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "description": "Compare versions of videos and photos side-by-side.",
     "main": ".webpack/main",
     "scripts": {

@@ -1,6 +1,7 @@
 @use 'sass:color';
-@use '_variables' as *;
 @use '_colors';
+@use '_variables' as *;
+@use '_mixins' as *;
 
 .media-info {
 	--spacing: 4px;
@@ -15,7 +16,7 @@
 	color: var(--white);
 	font-size: 1rem;
 	font-weight: 500;
-	background-color: var(--dark-blue);
+	background-color: var(--background);
 	border-radius: calc(var(--radius) + var(--spacing));
 
 	box-shadow:
@@ -72,8 +73,8 @@
 		white-space: nowrap;
 
 		&.clickable:hover {
-			color: var(--pink);
-			filter: drop-shadow(0 0 0.25rem var(--pink));
+			color: var(--prime);
+			filter: drop-shadow(0 0 0.25rem var(--prime));
 		}
 	}
 
@@ -87,8 +88,7 @@
 	}
 
     #mainContainer.floating-tools & {
-        background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
-        opacity: 0;
+        @include floating-tools-style;
     }
 
     #mainContainer:hover &,

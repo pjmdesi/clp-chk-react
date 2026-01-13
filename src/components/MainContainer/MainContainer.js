@@ -15,6 +15,8 @@ import { clampToolZoomScale, getZoomBounds } from '../../settings/userSettingsSc
 import keyboardControlsMap from '../../settings/keyboardControlsMap';
 import UserSettingsControl from '../UserSettingsControl';
 
+const KEYBOARD_CONTROLS_STORAGE_KEY = 'keyboardControlsMap.v1';
+
 const normalizeKey = key => {
 	if (typeof key !== 'string') return '';
 	// Spacebar comes through as " " in modern browsers.
@@ -63,8 +65,6 @@ const buildShortcutList = mapObj => {
 	return list;
 };
 
-const keyboardShortcuts = buildShortcutList(keyboardControlsMap);
-
 const isPlainObject = value => {
 	return !!value && typeof value === 'object' && !Array.isArray(value);
 };
@@ -77,6 +77,25 @@ const tryParseJsonObject = value => {
 	} catch {
 		return null;
 	}
+};
+
+// Keyboard controls are persisted separately from tool/app settings.
+// Shape matches the defaults in settings/keyboardControlsMap.js.
+const loadAndMigrateKeyboardControlsMap = () => {
+	const raw = localStorage.getItem(KEYBOARD_CONTROLS_STORAGE_KEY) || '';
+	const saved = tryParseJsonObject(raw);
+
+	if (!saved) {
+		localStorage.setItem(KEYBOARD_CONTROLS_STORAGE_KEY, JSON.stringify(keyboardControlsMap));
+		return keyboardControlsMap;
+	}
+
+	const { merged, changed } = mergeWithDefaults(keyboardControlsMap, saved);
+	if (changed) {
+		localStorage.setItem(KEYBOARD_CONTROLS_STORAGE_KEY, JSON.stringify(merged));
+	}
+
+	return merged;
 };
 
 const tryCoerceNumberString = value => {
@@ -173,6 +192,7 @@ const loadAndMigrateToolSettings = () => {
 	// Safety: never persist divider auto-move as enabled.
 	if (merged?.toolOptions?.auto) {
 		merged.toolOptions.auto = false;
+        merged.toolOptions.stick = true;
 	}
 
 	if (changed) {
@@ -304,6 +324,7 @@ function MainContainer() {
 
 	const [toolSettings, setToolSettings] = React.useState(() => loadAndMigrateToolSettings()),
 		[appSettings, setAppSettings] = React.useState(() => loadAndMigrateAppSettings()),
+		[keyboardControls, setKeyboardControls] = React.useState(() => loadAndMigrateKeyboardControlsMap()),
 		[playbackStatus, setPlaybackStatus] = React.useState(defaultPlaybackStatus),
 		[leftMedia, setLeftMedia] = React.useState(null),
 		[rightMedia, setRightMedia] = React.useState(null),
@@ -318,12 +339,16 @@ function MainContainer() {
 	// Modal props are snapshotted at open time; use refs so modal content can always read latest settings.
 	const toolSettingsRef = React.useRef(toolSettings);
 	const appSettingsRef = React.useRef(appSettings);
+	const keyboardControlsRef = React.useRef(keyboardControls);
 	const hadLeftMediaRef = React.useRef(false);
 	const hadRightMediaRef = React.useRef(false);
 	// Update refs synchronously so any open modal reads the latest values
 	// during the same render that committed state changes.
 	toolSettingsRef.current = toolSettings;
 	appSettingsRef.current = appSettings;
+	keyboardControlsRef.current = keyboardControls;
+
+	const keyboardShortcuts = React.useMemo(() => buildShortcutList(keyboardControlsRef.current), [keyboardControls]);
 
 	const updateMainContainerSize = ({ width, height }) => {
 		setMainContainerSize({ width, height });
@@ -337,6 +362,7 @@ function MainContainer() {
 	const resetStoredSettings = () => {
 		localStorage.removeItem('toolSettings');
 		localStorage.removeItem('appSettings');
+		localStorage.removeItem(KEYBOARD_CONTROLS_STORAGE_KEY);
 		localStorage.removeItem('leftMediaPath');
 		localStorage.removeItem('rightMediaPath');
 		window.location.reload();
@@ -562,6 +588,8 @@ function MainContainer() {
 
 	const executeKeyboardAction = React.useCallback(
 		action => {
+            console.log(action);
+
 			const tool = toolSettingsRef.current;
 			const app = appSettingsRef.current;
 			switch (action) {
@@ -638,6 +666,12 @@ function MainContainer() {
 						toolOptions: { ...prev.toolOptions, auto: false },
 					}));
 					return true;
+                case 'toolOverlay':
+                    setToolSettings(prev => ({
+                        ...prev,
+                        toolMode: 'overlay',
+                        toolOptions: { ...prev.toolOptions, auto: false },
+                    }));
 				case 'toolAutoMoveToggle':
 					setToolSettings(prev => {
 						if (prev.toolMode !== 'divider' && prev.toolMode !== 'horizontalDivider') return prev;
@@ -783,7 +817,12 @@ function MainContainer() {
 
 		window.addEventListener('keydown', onKeyDown, true);
 		return () => window.removeEventListener('keydown', onKeyDown, true);
-	}, [executeKeyboardAction]);
+	}, [executeKeyboardAction, keyboardShortcuts]);
+
+	// Save keyboard controls to localStorage when they change
+	React.useEffect(() => {
+		localStorage.setItem(KEYBOARD_CONTROLS_STORAGE_KEY, JSON.stringify(keyboardControls));
+	}, [keyboardControls]);
 
 	// Restore files from saved paths in Electron
 	React.useEffect(() => {
@@ -966,6 +1005,8 @@ function MainContainer() {
 				appSettings={appSettings}
 				toolSettingsRef={toolSettingsRef}
 				appSettingsRef={appSettingsRef}
+				keyboardControlsRef={keyboardControlsRef}
+				setKeyboardControls={setKeyboardControls}
 				unifiedMediaDimensions={unifiedMediaDimensions}
 				setUnifiedMediaDimensions={setUnifiedMediaDimensions}
 				leftMedia={leftMedia}

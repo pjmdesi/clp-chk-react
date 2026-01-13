@@ -63,6 +63,13 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 			// Expose player methods via ref
 			if (videoRef) {
 				videoRef.current = {
+					on: (eventName, handler) => player.on(eventName, handler),
+					off: (eventName, handler) => player.off(eventName, handler),
+					paused: () => player.paused(),
+					seeking: () => player.seeking(),
+					readyState: () => player.readyState(),
+					bufferedEnd: () => (typeof player.bufferedEnd === 'function' ? player.bufferedEnd() : 0),
+					getPlayer: () => player,
 					play: () => player.play(),
 					pause: () => player.pause(),
 					get currentTime() {

@@ -46,6 +46,10 @@ function MediaContainer({
 		rightMediaElem = React.useRef(),
 		videoClipper = React.useRef();
 
+	// Keep current playback status available to async callbacks (rAF sync loop, listeners).
+	const playbackStatusRef = React.useRef(playbackStatus);
+	playbackStatusRef.current = playbackStatus;
+
 	// Keep current tool settings available to async callbacks (intervals/listeners).
 	const toolSettingsRef = React.useRef(toolSettings);
 	toolSettingsRef.current = toolSettings;
@@ -104,75 +108,415 @@ function MediaContainer({
 		displayOverlayInfoTimeout = React.useRef(null),
 		leftFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null }),
 		rightFramerateData = React.useRef({ samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null }),
-		timeUpdateAnimationFrame = React.useRef(null),
 		previousZoomScale = React.useRef(toolSettings.zoomScale),
 		[validationWarnings, setValidationWarnings] = React.useState([]);
+
+	const upsertValidationWarning = React.useCallback(warning => {
+		if (!warning || typeof warning !== 'object') return;
+		if (!warning.type || !warning.message) return;
+		setValidationWarnings(prev => {
+			const filtered = prev.filter(w => w?.type !== warning.type);
+			return [...filtered, warning];
+		});
+	}, []);
+
+	const removeValidationWarning = React.useCallback(type => {
+		if (!type) return;
+		setValidationWarnings(prev => prev.filter(w => w?.type !== type));
+	}, []);
 
 	// Determine if media are images or videos
 	const leftMediaType = leftMediaMetaData?.mediaType || (leftMedia ? getFileMetadata(leftMedia)?.mediaType : null);
 	const rightMediaType = rightMediaMetaData?.mediaType || (rightMedia ? getFileMetadata(rightMedia)?.mediaType : null);
 
-	// Smooth playback position updates using requestAnimationFrame
-	React.useEffect(() => {
-		const hasAnyVideo = leftMediaType === 'video' || rightMediaType === 'video';
+	// Choose which video is the "master" clock: whichever is longer.
+	// If durations are missing/equal, default to right to preserve legacy behavior.
+	const masterSide = React.useMemo(() => {
+		if (!(leftMediaType === 'video' && rightMediaType === 'video')) return 'right';
+		const ld = leftMediaMetaData?.duration;
+		const rd = rightMediaMetaData?.duration;
+		if (typeof ld !== 'number' || !Number.isFinite(ld)) return 'right';
+		if (typeof rd !== 'number' || !Number.isFinite(rd)) return 'right';
+		if (ld === rd) return 'right';
+		return ld > rd ? 'left' : 'right';
+	}, [leftMediaType, rightMediaType, leftMediaMetaData?.duration, rightMediaMetaData?.duration]);
+	const masterSideRef = React.useRef(masterSide);
+	masterSideRef.current = masterSide;
+	const durationsDiffer = React.useMemo(() => {
+		if (!(leftMediaType === 'video' && rightMediaType === 'video')) return false;
+		const ld = leftMediaMetaData?.duration;
+		const rd = rightMediaMetaData?.duration;
+		if (typeof ld !== 'number' || !Number.isFinite(ld)) return false;
+		if (typeof rd !== 'number' || !Number.isFinite(rd)) return false;
+		return Math.abs(ld - rd) > 0.01;
+	}, [leftMediaType, rightMediaType, leftMediaMetaData?.duration, rightMediaMetaData?.duration]);
+	const leftShouldLoop = toolSettings.playerLoop && (!durationsDiffer || masterSide === 'left');
+	const rightShouldLoop = toolSettings.playerLoop && (!durationsDiffer || masterSide === 'right');
 
-		const updatePlaybackPosition = () => {
-			if (playbackStatus.playbackState === 'playing' && !playbackStatus.isScrubbing && rightMediaElem.current && rightMediaType === 'video') {
-				const currentTime = rightMediaElem.current.currentTime;
-				// Only update if there's a meaningful difference to avoid unnecessary renders
-				if (Math.abs(currentTime - playbackStatus.playbackPosition) > 0.001) {
-					PlayerControls.setCurrentTime(currentTime);
+	// Video sync state (buffering + sync loop)
+	const leftIsWaitingRef = React.useRef(false);
+	const rightIsWaitingRef = React.useRef(false);
+	const pausedByBufferingRef = React.useRef(false);
+	const resumeAfterBufferingRef = React.useRef(false);
+	const bufferingDebounceTimeoutRef = React.useRef(null);
+	const syncIntervalRef = React.useRef(null);
+	const lastPlaybackEmitAtRef = React.useRef(0);
+	const prevMasterTimeRef = React.useRef({ left: null, right: null });
+	const slaveFrozenRef = React.useRef(false);
+
+	const safePlay = React.useCallback(elem => {
+		try {
+			const result = elem?.play?.();
+			if (result && typeof result.then === 'function') {
+				result.catch(err => {
+					// Expected when a pause interrupts play (common during rapid state changes).
+					if (err?.name !== 'AbortError') {
+						// eslint-disable-next-line no-console
+						console.warn('Video play() failed:', err);
+					}
+				});
+			}
+		} catch {}
+	}, []);
+
+	const safePause = React.useCallback(elem => {
+		try {
+			elem?.pause?.();
+		} catch {}
+	}, []);
+
+	const getFreezeTime = React.useCallback((duration, framerate = 30) => {
+		if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) return 0;
+		const fr = typeof framerate === 'number' && Number.isFinite(framerate) && framerate > 0 ? framerate : 30;
+		// Avoid seeking exactly to duration (some players wrap to 0 / show first frame).
+		return Math.max(0, Math.min(duration - 0.001, duration - 1 / fr));
+	}, []);
+
+	const freezeVideoAtEnd = React.useCallback(
+		(elem, duration, framerate) => {
+			if (!elem) return;
+			const t = getFreezeTime(duration, framerate);
+			slaveFrozenRef.current = true;
+			try {
+				const player = elem.getPlayer?.();
+				// Prefer waiting for the seek to complete before pausing.
+				if (player && typeof player.one === 'function') {
+					player.one('seeked', () => {
+						safePause(elem);
+					});
+					elem.currentTime = t;
+					return;
 				}
-			}
-			timeUpdateAnimationFrame.current = requestAnimationFrame(updatePlaybackPosition);
-		};
+			} catch {}
+			try {
+				elem.currentTime = t;
+			} catch {}
+			safePause(elem);
+		},
+		[getFreezeTime, safePause]
+	);
 
-		if (playbackStatus.playbackState === 'playing' && leftMedia && rightMedia && hasAnyVideo) {
-			timeUpdateAnimationFrame.current = requestAnimationFrame(updatePlaybackPosition);
-		} else {
-			if (timeUpdateAnimationFrame.current) {
-				cancelAnimationFrame(timeUpdateAnimationFrame.current);
+	// Track buffering state. We pause/resume the actual players but do NOT toggle app playback state
+	// (avoids controller play/pause flicker).
+	React.useEffect(() => {
+		if (!(leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video')) {
+			leftIsWaitingRef.current = false;
+			rightIsWaitingRef.current = false;
+			pausedByBufferingRef.current = false;
+			resumeAfterBufferingRef.current = false;
+			if (bufferingDebounceTimeoutRef.current) {
+				clearTimeout(bufferingDebounceTimeoutRef.current);
+				bufferingDebounceTimeoutRef.current = null;
 			}
+			return;
 		}
 
-		return () => {
-			if (timeUpdateAnimationFrame.current) {
-				cancelAnimationFrame(timeUpdateAnimationFrame.current);
+		const left = leftMediaElem.current;
+		const right = rightMediaElem.current;
+		if (!left?.on || !left?.off || !right?.on || !right?.off) return;
+
+		const isEffectivelyEnded = (elem, meta) => {
+			try {
+				const dur = meta?.duration ?? elem?.duration;
+				if (typeof dur !== 'number' || !Number.isFinite(dur) || dur <= 0) return false;
+				const t = elem?.currentTime;
+				if (typeof t !== 'number' || !Number.isFinite(t)) return false;
+				return t >= dur - 0.05;
+			} catch {
+				return false;
 			}
 		};
-	}, [playbackStatus.playbackState, playbackStatus.isScrubbing, leftMedia, rightMedia, leftMediaType, rightMediaType]);
 
-	// Plays and pauses the videos when the playback state changes (images don't have playback)
+		const schedulePauseIfBuffering = () => {
+			if (bufferingDebounceTimeoutRef.current) return;
+			bufferingDebounceTimeoutRef.current = setTimeout(() => {
+				bufferingDebounceTimeoutRef.current = null;
+				const status = playbackStatusRef.current;
+				if (!status || status.isScrubbing || status.playbackState !== 'playing') return;
+
+				// Only pause playback when the current master is buffering.
+				// If only the slave buffers (or is ended), keep master playing.
+				const masterIsLeft = masterSideRef.current === 'left';
+				const masterBuffering = masterIsLeft ? leftIsWaitingRef.current : rightIsWaitingRef.current;
+				if (masterBuffering && !pausedByBufferingRef.current) {
+					pausedByBufferingRef.current = true;
+					resumeAfterBufferingRef.current = true;
+					safePause(leftMediaElem.current);
+					safePause(rightMediaElem.current);
+				}
+			}, 150);
+		};
+
+		const maybeResumeAfterBuffering = () => {
+			const status = playbackStatusRef.current;
+			const isBuffering = leftIsWaitingRef.current || rightIsWaitingRef.current;
+			if (isBuffering) return;
+			if (!pausedByBufferingRef.current || !resumeAfterBufferingRef.current) return;
+			if (!status || status.isScrubbing || status.playbackState !== 'playing') return;
+			// Only auto-resume if we were the ones who paused.
+			pausedByBufferingRef.current = false;
+			resumeAfterBufferingRef.current = false;
+			const masterElem = masterSideRef.current === 'left' ? leftMediaElem.current : rightMediaElem.current;
+			const slaveElem = masterSideRef.current === 'left' ? rightMediaElem.current : leftMediaElem.current;
+			safePlay(masterElem);
+			safePlay(slaveElem);
+		};
+
+		const onLeftWaiting = () => {
+			// If this video is at its end (shorter duration case), don't treat it as buffering.
+			if (isEffectivelyEnded(leftMediaElem.current, leftMediaMetaData)) return;
+			leftIsWaitingRef.current = true;
+			schedulePauseIfBuffering();
+		};
+		const onRightWaiting = () => {
+			if (isEffectivelyEnded(rightMediaElem.current, rightMediaMetaData)) return;
+			rightIsWaitingRef.current = true;
+			schedulePauseIfBuffering();
+		};
+		const onLeftResume = () => {
+			leftIsWaitingRef.current = false;
+			maybeResumeAfterBuffering();
+		};
+		const onRightResume = () => {
+			rightIsWaitingRef.current = false;
+			maybeResumeAfterBuffering();
+		};
+
+		// Video.js emits waiting/stalled when playback is blocked by buffering.
+		left.on('waiting', onLeftWaiting);
+		left.on('stalled', onLeftWaiting);
+		left.on('playing', onLeftResume);
+		left.on('canplay', onLeftResume);
+
+		right.on('waiting', onRightWaiting);
+		right.on('stalled', onRightWaiting);
+		right.on('playing', onRightResume);
+		right.on('canplay', onRightResume);
+
+		return () => {
+			left.off('waiting', onLeftWaiting);
+			left.off('stalled', onLeftWaiting);
+			left.off('playing', onLeftResume);
+			left.off('canplay', onLeftResume);
+
+			right.off('waiting', onRightWaiting);
+			right.off('stalled', onRightWaiting);
+			right.off('playing', onRightResume);
+			right.off('canplay', onRightResume);
+
+			if (bufferingDebounceTimeoutRef.current) {
+				clearTimeout(bufferingDebounceTimeoutRef.current);
+				bufferingDebounceTimeoutRef.current = null;
+			}
+		};
+	}, [leftMedia, rightMedia, leftMediaType, rightMediaType]);
+
+	// Keep the longer video as the "master" (plays normally). The shorter is the "slave".
+	// We gently adjust slave playbackRate to catch up when behind.
+	React.useEffect(() => {
+		const shouldRun =
+			leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video' && playbackStatus.playbackState === 'playing' && !playbackStatus.isScrubbing;
+
+		if (!shouldRun) {
+			if (syncIntervalRef.current) {
+				clearInterval(syncIntervalRef.current);
+				syncIntervalRef.current = null;
+			}
+			return;
+		}
+
+		const masterIsLeft = masterSideRef.current === 'left';
+		const master = masterIsLeft ? leftMediaElem.current : rightMediaElem.current;
+		const slave = masterIsLeft ? rightMediaElem.current : leftMediaElem.current;
+		if (!master || !slave) return;
+		const slaveMeta = masterIsLeft ? rightMediaMetaData : leftMediaMetaData;
+
+		const BASE_RATE = typeof toolSettings.playerSpeed === 'number' ? toolSettings.playerSpeed : 1;
+		const INTERVAL_MS = 250;
+		const EPS_SEC = 0.01;
+		const KP = 0.6;
+		const MAX_RATE_FRAC = 0.08; // +/- 8%
+		const HARD_SEEK_THRESHOLD_SEC = 0.35;
+		const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+		syncIntervalRef.current = setInterval(() => {
+			const status = playbackStatusRef.current;
+			if (!status || status.playbackState !== 'playing' || status.isScrubbing) return;
+			if (leftIsWaitingRef.current || rightIsWaitingRef.current) return;
+			if (pausedByBufferingRef.current) return;
+
+			// If the master is past the slave duration, keep slave on its last frame.
+			const slaveDur = slaveMeta?.duration ?? slave.duration;
+			const masterTimeNow = master.currentTime;
+			const slaveFr = slaveMeta?.framerate ?? 30;
+			if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 && masterTimeNow >= slaveDur - 0.02) {
+				try {
+					slave.playbackRate = BASE_RATE;
+					freezeVideoAtEnd(slave, slaveDur, slaveFr);
+				} catch {}
+				return;
+			}
+
+			// If we were previously frozen (shorter video ended) and master looped/seeked back,
+			// re-align the slave and resume it so it doesn't stay paused/choppy.
+			if (slaveFrozenRef.current) {
+				try {
+					slaveFrozenRef.current = false;
+					if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0) {
+						slave.currentTime = Math.min(masterTimeNow, slaveDur);
+					} else {
+						slave.currentTime = masterTimeNow;
+					}
+					slave.playbackRate = BASE_RATE;
+					safePlay(slave);
+				} catch {}
+			}
+
+			const masterTime = master.currentTime;
+			const slaveTime = slave.currentTime;
+			const delta = slaveTime - masterTime;
+			if (!Number.isFinite(delta)) return;
+
+			// Big drift: snap (rare).
+			if (Math.abs(delta) >= HARD_SEEK_THRESHOLD_SEC) {
+				try {
+					slave.currentTime = masterTime;
+					slave.playbackRate = BASE_RATE;
+				} catch {}
+				return;
+			}
+
+			// Small drift: subtle playbackRate correction.
+			if (Math.abs(delta) >= EPS_SEC) {
+				// If slave is behind (delta < 0), speed up.
+				const adj = clamp(-KP * delta, -MAX_RATE_FRAC, MAX_RATE_FRAC);
+				try {
+					slave.playbackRate = BASE_RATE * (1 + adj);
+				} catch {}
+			} else {
+				try {
+					slave.playbackRate = BASE_RATE;
+				} catch {}
+			}
+		}, INTERVAL_MS);
+
+		return () => {
+			if (syncIntervalRef.current) {
+				clearInterval(syncIntervalRef.current);
+				syncIntervalRef.current = null;
+			}
+			try {
+				slave.playbackRate = BASE_RATE;
+			} catch {}
+		};
+	}, [
+		playbackStatus.playbackState,
+		playbackStatus.isScrubbing,
+		leftMedia,
+		rightMedia,
+		leftMediaType,
+		rightMediaType,
+		toolSettings.playerSpeed,
+		leftMediaMetaData,
+		rightMediaMetaData,
+		safePause,
+	]);
+
+	// Play/pause the videos when playback state changes.
 	React.useEffect(() => {
 		if (leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video') {
-			// Always seek when scrubbing, or when paused and position is different (only for videos)
 			if (playbackStatus.playbackState === 'playing') {
-				if (leftMediaType === 'video') leftMediaElem.current.play();
-				if (rightMediaType === 'video') rightMediaElem.current.play();
+				// On transition to playing, align once to the shared playback position.
+				const leftDuration = leftMediaMetaData?.duration || leftMediaElem.current.duration;
+				const rightDuration = rightMediaMetaData?.duration || rightMediaElem.current.duration;
+				const target = playbackStatusRef.current?.playbackPosition ?? playbackStatus.playbackPosition;
+				const clampedLeft = Math.min(target, leftDuration);
+				const clampedRight = Math.min(target, rightDuration);
+				leftMediaElem.current.currentTime = clampedLeft;
+				rightMediaElem.current.currentTime = clampedRight;
+				leftMediaElem.current.playbackRate = toolSettings.playerSpeed;
+				rightMediaElem.current.playbackRate = toolSettings.playerSpeed;
+				const masterElem = masterSideRef.current === 'left' ? leftMediaElem.current : rightMediaElem.current;
+				const slaveElem = masterSideRef.current === 'left' ? rightMediaElem.current : leftMediaElem.current;
+				const slaveDur = masterSideRef.current === 'left' ? rightDuration : leftDuration;
+				const slaveT = masterSideRef.current === 'left' ? clampedRight : clampedLeft;
+				safePlay(masterElem);
+				// If the slave video is already at its end (shorter duration), keep it on the last frame.
+				if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 && slaveT >= slaveDur - 0.02) {
+					try {
+						const slaveFr = (masterSideRef.current === 'left' ? rightMediaMetaData?.framerate : leftMediaMetaData?.framerate) ?? 30;
+						slaveElem.currentTime = getFreezeTime(slaveDur, slaveFr);
+					} catch {}
+					safePause(slaveElem);
+				} else {
+					safePlay(slaveElem);
+				}
 			}
 
 			if (playbackStatus.playbackState === 'paused') {
-				if (leftMediaType === 'video') leftMediaElem.current.pause();
-				if (rightMediaType === 'video') rightMediaElem.current.pause();
-			}
-			const shouldSeek =
-				playbackStatus.isScrubbing || (playbackStatus.playbackState === 'paused' && Math.abs(playbackStatus.playbackPosition - leftMediaElem.current.currentTime) > 0.01);
-			if (shouldSeek) {
-				// Clamp the seek time to each video's duration
-				// If the seek time is beyond a video's duration, seek to its last frame
-				const leftDuration = leftMediaMetaData?.duration || leftMediaElem.current.duration;
-				const rightDuration = rightMediaMetaData?.duration || rightMediaElem.current.duration;
-
-				leftMediaElem.current.currentTime = Math.min(playbackStatus.playbackPosition, leftDuration);
-				rightMediaElem.current.currentTime = Math.min(playbackStatus.playbackPosition, rightDuration);
+				leftMediaElem.current.playbackRate = toolSettings.playerSpeed;
+				rightMediaElem.current.playbackRate = toolSettings.playerSpeed;
+				if (leftMediaType === 'video') safePause(leftMediaElem.current);
+				if (rightMediaType === 'video') safePause(rightMediaElem.current);
 			}
 		}
-	}, [playbackStatus.playbackState, playbackStatus.playbackPosition, playbackStatus.isScrubbing, leftMediaType, rightMediaType, leftMediaMetaData, rightMediaMetaData]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [playbackStatus.playbackState, leftMedia, rightMedia, leftMediaType, rightMediaType, leftMediaMetaData, rightMediaMetaData, toolSettings.playerSpeed, safePlay, safePause]);
+
+	// Apply seeks only while scrubbing or paused (never during normal playing ticks).
+	React.useEffect(() => {
+		if (!(leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video')) return;
+		if (!(playbackStatus.isScrubbing || playbackStatus.playbackState === 'paused')) return;
+
+		const leftDuration = leftMediaMetaData?.duration || leftMediaElem.current.duration;
+		const rightDuration = rightMediaMetaData?.duration || rightMediaElem.current.duration;
+		const target = playbackStatus.playbackPosition;
+		leftMediaElem.current.currentTime = Math.min(target, leftDuration);
+		rightMediaElem.current.currentTime = Math.min(target, rightDuration);
+	}, [
+		playbackStatus.playbackPosition,
+		playbackStatus.isScrubbing,
+		playbackStatus.playbackState,
+		leftMedia,
+		rightMedia,
+		leftMediaType,
+		rightMediaType,
+		leftMediaMetaData,
+		rightMediaMetaData,
+	]);
 
 	// Switches between auto and manual mode for the divider tool
 	// Also reapply when media files are loaded to ensure clipper is styled correctly
 	React.useEffect(() => {
-		if (!leftMedia || !rightMedia) return;
+		if (!leftMedia || !rightMedia) {
+			setToolSettings(prevSettings => {
+				const newToolSettings = { ...prevSettings };
+				newToolSettings.toolOptions.auto = false;
+				newToolSettings.toolOptions.stick = true;
+				return newToolSettings;
+			});
+			return;
+		}
 
 		clearInterval(continuousClipInterval.current);
 		if ((toolSettings.toolMode === 'divider' || toolSettings.toolMode === 'horizontalDivider') && toolSettings.toolOptions.auto) {
@@ -190,6 +534,7 @@ function MediaContainer({
 	// Check if we had media before but now one is missing (media was removed)
 	// Save the current tool mode and switch to divider mode
 	// When both media are present again, restore the previous tool mode
+	// Set initial tool mode to divider on first run
 	React.useEffect(() => {
 		const hadMedia = previousLeftMedia.current && previousRightMedia.current;
 		const nowMissingMedia = !leftMedia || !rightMedia;
@@ -201,11 +546,8 @@ function MediaContainer({
 			const newToolSettings = { ...toolSettings };
 			newToolSettings.toolOptions.auto = false;
 			newToolSettings.toolMode = 'divider';
+			newToolSettings.toolOptions.stick = true;
 			setToolSettings(newToolSettings);
-			// setClipperStyle({
-			// 	width: mediaContainerElem.current ? `${Math.floor(mediaContainerElem.current.offsetWidth / 2)}px` : '50%',
-			// 	height: mediaContainerElem.current ? `${Math.floor(mediaContainerElem.current.offsetHeight / 2)}px` : '100%',
-			// });
 			clipMedia();
 			return;
 		}
@@ -217,9 +559,11 @@ function MediaContainer({
 			}
 
 			const newToolSettings = { ...toolSettings };
-			newToolSettings.toolOptions.auto = false;
 			newToolSettings.toolMode = 'divider';
+			newToolSettings.toolOptions.auto = false;
+			newToolSettings.toolOptions.stick = true;
 
+			clipperPositionRef.current.x = mediaContainerElem.current ? mediaContainerElem.current.offsetWidth / 2 : '50%';
 			setToolSettings(newToolSettings);
 		} else if (!hadMedia && nowHaveMedia && toolModeBeforeMediaRemoval !== 'divider') {
 			// Restore previous tool mode when both media are present again
@@ -239,8 +583,11 @@ function MediaContainer({
 	// Recalculate unified dimensions when metadata loads
 	// Then run clipMedia to apply new dimensions
 	React.useEffect(() => {
+		const compatTypes = ['mixedMediaTypes', 'differentDurations', 'differentFramerates', 'differentDimensions'];
+
 		if (!leftMediaMetaData || !rightMediaMetaData) {
-			setValidationWarnings([]);
+			// Keep non-compatibility warnings (e.g., persistence warnings) while either side is still loading.
+			setValidationWarnings(prev => prev.filter(w => !compatTypes.includes(w?.type)));
 		} else {
 			const warnings = [];
 
@@ -260,7 +607,7 @@ function MediaContainer({
 					// More than 0.1 second difference
 					warnings.push({
 						type: 'differentDurations',
-						severity: 'warning',
+						severity: 'info',
 						message: `Videos have different durations: ${leftMediaMetaData.duration.toFixed(2)}s vs ${rightMediaMetaData.duration.toFixed(2)}s. The shorter video will display its last frame after it ends.`,
 					});
 				}
@@ -284,11 +631,14 @@ function MediaContainer({
 				warnings.push({
 					type: 'differentDimensions',
 					severity: 'info',
-					message: `Media files have different dimensions: ${leftMediaMetaData.width}×${leftMediaMetaData.height} vs ${rightMediaMetaData.width}×${rightMediaMetaData.height}. Both will be scaled to match the larger dimensions.`,
+					message: `Media files have different dimensions: ${leftMediaMetaData.width}×${leftMediaMetaData.height} vs ${rightMediaMetaData.width}×${rightMediaMetaData.height}. The smaller will be scaled up to match the larger dimensions.`,
 				});
 			}
 
-			setValidationWarnings(warnings);
+			setValidationWarnings(prev => {
+				const preserved = prev.filter(w => !compatTypes.includes(w?.type));
+				return [...preserved, ...warnings];
+			});
 		}
 
 		let unifiedWidth = 0,
@@ -325,19 +675,25 @@ function MediaContainer({
 	}, [unifiedMediaDimensions, toolSettings.toolOptions.value]);
 
 	// Updates the playback speed of the videos (images don't have playback speed)
+	// Updates the volume of the videos (images don't have audio)
 	React.useEffect(() => {
 		if (leftMediaType === 'video' || rightMediaType === 'video') {
 			updateMediaPlaybackSpeed();
 		}
-	}, [toolSettings.playerSpeed, leftMediaType, rightMediaType]);
-
-	// Updates the volume of the videos (images don't have audio)
-	React.useEffect(() => {
 		if (leftMedia && rightMedia) {
 			if (leftMediaType === 'video') leftMediaElem.current.volume = toolSettings.playerAudio.left.volume;
 			if (rightMediaType === 'video') rightMediaElem.current.volume = toolSettings.playerAudio.right.volume;
 		}
-	}, [toolSettings.playerAudio, leftMediaType, rightMediaType]);
+	}, [toolSettings.playerSpeed, leftMediaType, rightMediaType, toolSettings.playerAudio]);
+
+	// Updates the clipper position when the main container size changes
+	React.useEffect(() => {
+		const newClipperPosition = {
+			x: mediaContainerElem.current ? mediaContainerElem.current.offsetWidth / 2 : null,
+			y: mediaContainerElem.current ? mediaContainerElem.current.offsetHeight / 2 : null,
+		};
+		clipperPositionRef.current = newClipperPosition;
+	}, [mainContainerSize]);
 
 	// Runs the clipMedia function when the zoom scale or viewport size changes
 	// Scale the offset proportionally with zoom to keep container center as focal point
@@ -356,7 +712,6 @@ function MediaContainer({
 		} else {
 			clipMedia();
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [toolSettings.zoomScale, mainContainerSize]);
 
 	// Update saved tool mode and run clipMedia when user changes the tool
@@ -546,11 +901,58 @@ function MediaContainer({
 		}
 	};
 
-	const handleTimeUpdate = e => {
+	const handleTimeUpdate = side => e => {
 		// Don't update position while user is scrubbing the slider
 		if (playbackStatus.isScrubbing) return;
+		if (playbackStatusRef.current?.playbackState !== 'playing') return;
+		// Only the current master should drive the shared playbackPosition.
+		if (side !== masterSideRef.current) return;
+		if (leftIsWaitingRef.current || rightIsWaitingRef.current || pausedByBufferingRef.current) return;
 
-		PlayerControls.setCurrentTime(e.target.currentTime);
+		const now = performance.now();
+		const minEmitIntervalMs = 100; // keep UI responsive without re-rendering too often
+		if (now - lastPlaybackEmitAtRef.current < minEmitIntervalMs) return;
+		lastPlaybackEmitAtRef.current = now;
+
+		const t = e.target.currentTime;
+		if (typeof t === 'number' && Number.isFinite(t)) {
+			// Detect looping by time jumping backwards on the master.
+			const prev = prevMasterTimeRef.current?.[side];
+			prevMasterTimeRef.current[side] = t;
+			const looped = typeof prev === 'number' && Number.isFinite(prev) && t + 0.25 < prev;
+			if (looped) {
+				// Master looped back; resume the slave from the new time.
+				slaveFrozenRef.current = false;
+				const masterIsLeft = side === 'left';
+				const slaveElem = masterIsLeft ? rightMediaElem.current : leftMediaElem.current;
+				const slaveMeta = masterIsLeft ? rightMediaMetaData : leftMediaMetaData;
+				const slaveDur = slaveMeta?.duration ?? slaveElem?.duration;
+				const slaveFr = slaveMeta?.framerate ?? 30;
+				try {
+					slaveElem.playbackRate = toolSettings.playerSpeed;
+					if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 && t >= slaveDur - 0.02) {
+						freezeVideoAtEnd(slaveElem, slaveDur, slaveFr);
+					} else {
+						slaveElem.currentTime = typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 ? Math.min(t, slaveDur) : t;
+						safePlay(slaveElem);
+					}
+				} catch {}
+			}
+
+			// If playback has surpassed the shorter/slave duration, force-freeze it to its last frame.
+			if (leftMediaType === 'video' && rightMediaType === 'video') {
+				const masterIsLeft = masterSideRef.current === 'left';
+				const slaveElem = masterIsLeft ? rightMediaElem.current : leftMediaElem.current;
+				const slaveMeta = masterIsLeft ? rightMediaMetaData : leftMediaMetaData;
+				const slaveDur = slaveMeta?.duration ?? slaveElem?.duration;
+				const slaveFr = slaveMeta?.framerate ?? 30;
+				if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 && t >= slaveDur - 0.02) {
+					freezeVideoAtEnd(slaveElem, slaveDur, slaveFr);
+				}
+			}
+
+			PlayerControls.setCurrentTime(t);
+		}
 	};
 
 	const updateMediaPlaybackSpeed = () => {
@@ -1130,11 +1532,14 @@ function MediaContainer({
 		const newToolSettings = { ...toolSettings };
 		const { snapPoints, min, max } = zoomSnapModelRef.current || computeZoomSnapModel();
 
+		const minThreshold = min + 0.01;
+		const maxThreshold = max - 0.01;
+
 		// Explicit zoom target (e.g., slider)
 		if (typeof zoomLevel === 'number' && Number.isFinite(zoomLevel)) {
 			let target = roundZoom(clamp(zoomLevel, min, max));
-			if (target === min && zoomLevel < min) pulseZoomBound('min');
-			if (target === max && zoomLevel > max) pulseZoomBound('max');
+			if (target === min && zoomLevel < minThreshold) pulseZoomBound('min');
+			if (target === max && zoomLevel > maxThreshold) pulseZoomBound('max');
 			newToolSettings.zoomScale = target;
 			setToolSettings(newToolSettings);
 			return;
@@ -1152,8 +1557,10 @@ function MediaContainer({
 		}
 
 		if (next === current) {
-			if (direction < 0 && current <= min) pulseZoomBound('min');
-			if (direction > 0 && current >= max) pulseZoomBound('max');
+			console.log(direction, current, min, max);
+
+			if (direction < 0 && current <= minThreshold) pulseZoomBound('min');
+			if (direction > 0 && current >= maxThreshold) pulseZoomBound('max');
 			return;
 		}
 
@@ -1401,15 +1808,14 @@ function MediaContainer({
 		setToolSettings({ ...toolSettings, stick: !toolSettings.stick });
 
 		// Detect double click to reset clipper position
-		const now = Date.now();
-		const timeSinceLastClick = now - lastMiddleClickTimeRef.current;
-		if (timeSinceLastClick < appSettings.doubleClickSpeed) {
-			// Double-click detected - reset clipper position
-			setClipperPos({ x: 50, y: 50 });
-			lastMiddleClickTimeRef.current = 0;
-			setToolSettings({ ...toolSettings, stick: true });
+		if (e.detail === 2) {
+			const newClipperPosition = {
+				x: mediaContainerElem.current ? mediaContainerElem.current.offsetWidth / 2 : null,
+				y: mediaContainerElem.current ? mediaContainerElem.current.offsetHeight / 2 : null,
+			};
+            setToolSettings(ts => ({ ...ts, stick: true }));
+			clipperPositionRef.current = newClipperPosition;
 			clipMedia();
-			return;
 		}
 	};
 
@@ -1496,10 +1902,40 @@ function MediaContainer({
 			) : (
 				<MediaFileInput
 					setMediaFile={setLeftMedia}
+					setSecondaryMediaFile={setRightMedia}
 					mediaKey="leftMediaHandle"
 					oppositeMediaMetaData={rightMediaMetaData}
 					isInElectron={isInElectron}
 					isInBrowser={isInBrowser}
+					onMissingFilePath={() =>
+						upsertValidationWarning({
+							type: 'missingFilePathLeft',
+							severity: 'warning',
+							message:
+								'Could not save a filesystem path for the left media. Files loaded via drag & drop may not restore after restart. Use the file picker to enable restore.',
+						})
+					}
+					onHasFilePath={() => removeValidationWarning('missingFilePathLeft')}
+					onSecondaryMissingFilePath={() =>
+						upsertValidationWarning({
+							type: 'missingFilePathRight',
+							severity: 'warning',
+							message:
+								'Could not save a filesystem path for the right media. Files loaded via drag & drop may not restore after restart. Use the file picker to enable restore.',
+						})
+					}
+					onSecondaryHasFilePath={() => removeValidationWarning('missingFilePathRight')}
+					onTooManyFilesSelected={count => {
+						if (typeof count === 'number' && count > 2) {
+							upsertValidationWarning({
+								type: 'tooManyFilesSelected',
+								severity: 'info',
+								message: `You selected ${count} files. Only the first two will be loaded.`,
+							});
+						} else {
+							removeValidationWarning('tooManyFilesSelected');
+						}
+					}}
 				/>
 			)}
 			{rightMedia ? (
@@ -1520,11 +1956,13 @@ function MediaContainer({
 						<VideoJSPlayer
 							videoRef={rightMediaElem}
 							id="right-video"
-							onTimeUpdate={handleTimeUpdate}
+							onTimeUpdate={handleTimeUpdate('right')}
 							onLoadedMetadata={handleLoadedMetadata}
 							src={rightMedia || ''}
-							loop={toolSettings.playerLoop}
-							onEnded={() => PlayerControls.pause()}
+							loop={rightShouldLoop}
+							onEnded={() => {
+								if (!rightShouldLoop) PlayerControls.pause();
+							}}
 							muted={toolSettings.playerAudio.right.muted}
 							volume={toolSettings.playerAudio.right.volume}
 							playbackRate={toolSettings.playerSpeed}
@@ -1537,10 +1975,40 @@ function MediaContainer({
 			) : (
 				<MediaFileInput
 					setMediaFile={setRightMedia}
+					setSecondaryMediaFile={setLeftMedia}
 					mediaKey="rightMediaHandle"
 					oppositeMediaMetaData={leftMediaMetaData}
 					isInElectron={isInElectron}
 					isInBrowser={isInBrowser}
+					onMissingFilePath={() =>
+						upsertValidationWarning({
+							type: 'missingFilePathRight',
+							severity: 'warning',
+							message:
+								'Could not save a filesystem path for the right media. Files loaded via drag & drop may not restore after restart. Use the file picker to enable restore.',
+						})
+					}
+					onHasFilePath={() => removeValidationWarning('missingFilePathRight')}
+					onSecondaryMissingFilePath={() =>
+						upsertValidationWarning({
+							type: 'missingFilePathLeft',
+							severity: 'warning',
+							message:
+								'Could not save a filesystem path for the left media. Files loaded via drag & drop may not restore after restart. Use the file picker to enable restore.',
+						})
+					}
+					onSecondaryHasFilePath={() => removeValidationWarning('missingFilePathLeft')}
+					onTooManyFilesSelected={count => {
+						if (typeof count === 'number' && count > 2) {
+							upsertValidationWarning({
+								type: 'tooManyFilesSelected',
+								severity: 'info',
+								message: `You selected ${count} files. Only the first two will be loaded.`,
+							});
+						} else {
+							removeValidationWarning('tooManyFilesSelected');
+						}
+					}}
 				/>
 			)}
 			<div
@@ -1558,10 +2026,13 @@ function MediaContainer({
 								videoRef={leftMediaElem}
 								id="left-video"
 								style={clippedMediaWrapperStyle}
+								onTimeUpdate={handleTimeUpdate('left')}
 								onLoadedMetadata={handleLoadedMetadata}
 								src={leftMedia || ''}
-								loop={toolSettings.playerLoop}
-								onEnded={() => PlayerControls.pause()}
+								loop={leftShouldLoop}
+								onEnded={() => {
+									if (!leftShouldLoop) PlayerControls.pause();
+								}}
 								muted={toolSettings.playerAudio.left.muted}
 								volume={toolSettings.playerAudio.left.volume}
 								playbackRate={toolSettings.playerSpeed}

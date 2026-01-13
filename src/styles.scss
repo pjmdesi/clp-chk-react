@@ -1,16 +1,19 @@
 @use 'sass:math';
 @use 'sass:color';
-@use '_reset';
 
+@use '_mixins' as *;
 @use '_variables' as *;
 @use '_colors';
 
+@use '_reset';
 @use '_modals';
 @use '_sliders';
 @use '_inputs';
 @use '_mediaContainer';
 @use '_controllerBar';
 @use '_mediaInfoBar';
+@use '_validation';
+@use '_keyboardShortcuts';
 
 @font-face {
 	font-family: 'Recursive';
@@ -48,31 +51,57 @@ button {
 		box-shadow 0.15s ease-in-out;
 
 	&:hover {
-		background: var(--pink);
+		background: var(--prime);
 		box-shadow: $bevel-shadow-pop-out;
 	}
 
 	&:active {
-		background: var(--pink);
+		background: var(--prime);
 		box-shadow: $bevel-shadow-sink-in;
 	}
 }
 
-body:has(#mainContainer.electron-mode) {
-	overflow: hidden;
-	border-radius: 16px;
+::-webkit-scrollbar {
+	width: calc(var(--root-padding) * 2);
+	background-color: transparent;
+}
+
+::-webkit-scrollbar-track {
+	background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-clip: padding-box;
+	border-radius: 50px;
+	border: var(--root-padding) solid transparent;
+    border-left-width: 0px;
+	background-color: rgba(var(--white-rgb), 0.1);
+	&:hover {
+		background-color: rgba(var(--white-rgb), 0.2);
+	}
+}
+
+body {
+	&:has(#mainContainer.electron-mode) {
+		overflow: hidden;
+		border-radius: 16px;
+	}
 }
 
 a {
-    color: var(--orange);
+	color: var(--prime);
 
-    &:hover {
-        text-decoration: underline;
-    }
+	&:hover {
+		text-decoration: underline;
+	}
+}
+
+.cet-container {
+	background: var(--background-gradient-south-darker);
 }
 
 #root {
-	background: $dark-blue-gradient;
+	// background: $background-dark-gradient;
 	padding: 36px var(--root-padding) var(--root-padding);
 
 	font:
@@ -109,7 +138,7 @@ a {
 		transform: translateX(-50%);
 		padding: calc(var(--spacing) * 2);
 		border-radius: calc(var(--radius) * 2);
-		background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+		background-color: rgba($color: var(--background-rgb), $alpha: 0.75);
 		box-shadow:
 			0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
 			0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
@@ -121,16 +150,16 @@ a {
 		--floating-tools-spacing: 16px;
 	}
 
-    #appTooltip {
-        position: absolute;
-        pointer-events: none;
-        background-color: rgba($color: var(--black-rgb), $alpha: 0.75);
-        color: var(--white);
-        padding: calc(var(--spacing) / 2) var(--spacing);
-        border-radius: var(--radius);
-        font-size: calc(var(--font-size) * 0.875);
-        max-width: 300px;
-        z-index: 1000;
+	#appTooltip {
+		position: absolute;
+		pointer-events: none;
+		background-color: rgba($color: var(--black-rgb), $alpha: 0.75);
+		color: var(--white);
+		padding: calc(var(--spacing) / 2) var(--spacing);
+		border-radius: var(--radius);
+		font-size: calc(var(--font-size) * 0.875);
+		max-width: 300px;
+		z-index: 99999;
 		opacity: 0;
 		visibility: hidden;
 		transition:
@@ -139,11 +168,11 @@ a {
 			bottom var(--default-timing) ease-in-out,
 			visibility 0s linear var(--default-timing);
 		white-space: pre-wrap;
-        box-shadow:
-            0 2px 4px rgba($color: var(--black-rgb), $alpha: 0.5),
-            0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
-            0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
-        backdrop-filter: blur(8px);
+		box-shadow:
+			0 2px 4px rgba($color: var(--black-rgb), $alpha: 0.5),
+			0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
+			0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
+		backdrop-filter: blur(8px);
 
 		&.visible {
 			opacity: 1;
@@ -154,5 +183,5 @@ a {
 				bottom var(--default-timing) ease-in-out,
 				visibility 0s;
 		}
-    }
+	}
 }

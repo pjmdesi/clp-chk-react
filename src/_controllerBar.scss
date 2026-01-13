@@ -1,12 +1,11 @@
-@use '_variables' as *;
 @use '_colors';
+@use '_variables' as *;
+@use '_mixins' as *;
 
 #controllerBar {
 	--controller-padding: 8px;
 
     position: absolute;
-
-	// flex: 0 0 calc(32px + var(--floating-tools-spacing));
 
 	padding-left: calc(var(--floating-tools-spacing) / 2);
 	padding-right: calc(var(--floating-tools-spacing) / 2);
@@ -15,7 +14,7 @@
 	inset: auto var(--floating-tools-spacing) var(--floating-tools-spacing);
 	border-radius: 0 0 8px 8px;
 
-	background-color: var(--dark-blue);
+	background-color: var(--background);
 
 	display: grid;
 	grid: 1fr / 1fr 1fr;
@@ -71,21 +70,9 @@
 	}
 
 	&.floating {
-		background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
-		border-radius: var(--floating-tools-spacing);
+        @include floating-tools-style;
 
 		opacity: 0;
-
-		box-shadow:
-			0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,
-			0 -3px 8px rgba($color: var(--black-rgb), $alpha: 0.25) inset;
-
-		backdrop-filter: blur(var(--floating-tools-spacing));
-
-		animation: position-delay-rel-to-abs;
-		animation-duration: 0s;
-		animation-delay: 0s;
-		animation-fill-mode: both;
 
 		#mainContainer:hover > &,
 		#mainContainer:focus-within > & {
@@ -100,6 +87,7 @@
 	}
 
 	&.docked {
+        background: transparent;
 		z-index: 0;
 		animation: position-delay-abs-to-rel;
 		animation-duration: 0s;

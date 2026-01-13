@@ -11,22 +11,22 @@
     --default-timing: 0.3s;
 }
 
-$orange-gradient: linear-gradient(0deg, var(--pale-orange) 0%, var(--orange) 100%);
-$blue-gradient: linear-gradient(0deg, var(--gray-blue) 0%, var(--blue) 100%);
-$dark-blue-gradient: linear-gradient(0deg, var(--dark-blue) 0%, var(--darker-blue) 100%);
+$background-gradient: linear-gradient(0deg, var(--gray-blue) 0%, var(--background) 100%);
+$background-dark-gradient: linear-gradient(0deg, var(--background) 0%, var(--darker-blue) 100%);
+$accent-gradient: linear-gradient(0deg, var(--pale-orange) 0%, var(--accent) 100%);
 
 // Bevel shadow effects
 $bevel-shadow-sink-in:
 	0 -1px 2px
 		rgba(
 			$color: var(--white-rgb),
-			$alpha: 0.1,
+			$alpha: 0.15,
 		)
 		inset,
 	0 1px 2px
 		rgba(
 			$color: var(--black-rgb),
-			$alpha: 0.25,
+			$alpha: 0.35,
 		)
 		inset;
 
@@ -40,6 +40,6 @@ $bevel-shadow-pop-out:
 	0 -1px 2px
 		rgba(
 			$color: var(--black-rgb),
-			$alpha: 0.2,
+			$alpha: 0.25,
 		)
 		inset;

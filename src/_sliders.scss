@@ -45,13 +45,16 @@
 
 			margin-top: calc(-1 * var(--slider-spacing) / 2);
 
-			background: var(--pink);
+			background: var(--prime);
 			opacity: 1;
 			border: 2px solid #ffffff;
 			border-radius: 50%;
+            box-shadow: 0 0 0 0 var(--prime);
+
+            transition: box-shadow var(--default-timing) ease-in-out;
 
 			&.rc-slider-handle-dragging {
-				box-shadow: 0 0 0 3px var(--orange);
+				box-shadow: 0 0 0 3px var(--prime);
 			}
 		}
 
@@ -138,7 +141,7 @@
             &:hover {
                 background: rgba(var(--white-rgb), 0.25);
                 &:after {
-                    background: var(--orange);
+                    background: var(--prime);
                 }
             }
 		}
@@ -178,8 +181,8 @@
 		font-size: var(--font-size);
 		padding: var(--spacing) 8px;
 
-		background: #08162f;
-		box-shadow: $bevel-shadow-pop-out;
+		// background: #08162f;
+		box-shadow: $bevel-shadow-sink-in;
 		border-radius: var(--radius);
 
 		input {
@@ -206,7 +209,7 @@
 		cursor: auto;
 
 		padding: var(--spacing);
-		background-color: var(--dark-blue);
+		background-color: var(--background);
 		border-radius: calc(var(--radius) + var(--spacing));
 
 		box-shadow:
@@ -237,7 +240,7 @@
 
 		#mainContainer.floating-tools & {
 			opacity: 0;
-			background-color: rgba($color: var(--darker-blue-rgb), $alpha: 0.75);
+			background-color: rgba($color: var(--background-rgb), $alpha: 0.75);
 		}
 
 		#mainContainer.floating-tools:hover &,

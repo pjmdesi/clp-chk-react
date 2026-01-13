@@ -1,0 +1,43 @@
+@use '_variables' as *;
+@use '_colors' as *;
+
+.keyboard-shortcuts {
+	.keyboard-shortcuts-error {
+		color: rgba(var(--caution-rgb), 1);
+		margin: 0;
+	}
+
+	.keyboard-shortcuts-list {
+		display: flex;
+		flex-direction: column;
+		gap: calc(2 * var(--spacing));
+	}
+
+	.keyboard-shortcuts-row {
+		display: flex;
+		align-items: center;
+		gap: calc(2 * var(--spacing));
+	}
+
+	.keyboard-shortcuts-title {
+		flex: 1 1 auto;
+		min-width: 180px;
+	}
+
+	.keyboard-shortcuts-input {
+		flex: 0 0 240px;
+		padding: calc(1.5 * var(--spacing)) calc(2 * var(--spacing));
+		border-radius: var(--radius);
+		background: rgba(var(--white-rgb), 0.06);
+		box-shadow: $bevel-shadow-sink-in;
+		cursor: text;
+
+		&.listening {
+			background: rgba(var(--prime-rgb), 0.15);
+		}
+	}
+
+	.keyboard-shortcuts-clear {
+		flex: 0 0 auto;
+	}
+}
