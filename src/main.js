@@ -1,7 +1,7 @@
 import { setupTitlebar, attachTitlebarToWindow } from 'custom-electron-titlebar/main';
 import Store from 'electron-store';
 
-const { app, session, protocol, BrowserWindow, Menu, ipcMain, shell, ipcRenderer, contextBridge, screen } = require('electron');
+const { app, session, protocol, BrowserWindow, Menu, ipcMain, shell, ipcRenderer, contextBridge, screen, dialog } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -193,9 +193,9 @@ const createWindow = () => {
 
 	// Load saved window bounds or use defaults
 	// In development, always use default size to leave room for devtools
-	const savedBounds = DEV ? null : store.get('windowBounds');
+	const savedBounds = store.get('windowBounds');
 	const defaultWidth = 1000 + DEV * 600;
-	const defaultHeight = 600 + DEV * 400;
+	const defaultHeight = 800 + DEV * 600;
 
 	mainWindow = new BrowserWindow({
 		// Leave room for devtools when in development
@@ -225,6 +225,7 @@ const createWindow = () => {
 			preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
 			webSecurity: !DEV,
 			allowRunningInsecureContent: false,
+            offscreen: false,
 		},
 	});
 
@@ -299,6 +300,24 @@ app.on('window-all-closed', () => {
 ipcMain.on('open-file', (event, filePath) => {
 	// Show the given file in a file manager. If possible, select the file.
 	shell.showItemInFolder(filePath);
+});
+
+// Renderer requests a native file picker and receives an absolute filesystem path.
+ipcMain.handle('pick-media-file', async () => {
+	if (!mainWindow || mainWindow.isDestroyed()) return null;
+	const result = await dialog.showOpenDialog(mainWindow, {
+		title: 'Choose a media file',
+		properties: ['openFile'],
+		filters: [
+			{
+				name: 'Media Files',
+				extensions: ['mp4', 'avi', 'mov', 'mpeg', 'mkv', 'webm', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'],
+			},
+			{ name: 'All Files', extensions: ['*'] },
+		],
+	});
+	if (result.canceled) return null;
+	return Array.isArray(result.filePaths) && result.filePaths[0] ? result.filePaths[0] : null;
 });
 
 // Open external links in the user's default browser.

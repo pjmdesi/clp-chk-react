@@ -55,11 +55,47 @@ function MediaContainer({
 	// Keep the latest wheel handler to avoid stale closures (listener is registered once).
 	const handleScrollRef = React.useRef(null);
 
-	const [clipperPosition, setClipperPosition] = React.useState({ x: 50, y: 50 }),
-		[mediaOffset, setMediaOffset] = React.useState({ x: 0, y: 0 }),
-		[clipperStyle, setClipperStyle] = React.useState({ width: '50%' }),
-		[clippedMediaWrapperStyle, setClippedMediaWrapperStyle] = React.useState({ minWidth: '200%', zIndex: 3 }),
-		[unClippedMediaWrapperStyle, setUnClippedMediaWrapperStyle] = React.useState({ minWidth: '100%' }),
+	// Keep clipper position in a ref for immediate reads during high-frequency events.
+	const clipperPositionRef = React.useRef({ x: null, y: null });
+
+	// Keep clipper + media wrapper styles in a single state object.
+	// We update them together (in rAF) so they commit to the DOM in lock-step.
+	const [clipLayout, setClipLayout] = React.useState({
+		clipperPosition: { x: null, y: null },
+		clipperStyle: {},
+		clipperMaskStyle: {},
+		clippedMediaWrapperStyle: { minWidth: '200%', zIndex: 3 },
+		unClippedMediaWrapperStyle: { minWidth: '100%' },
+	});
+	const clipLayoutRef = React.useRef(clipLayout);
+	clipLayoutRef.current = clipLayout;
+
+	const pendingClipLayoutRef = React.useRef(null);
+	const clipLayoutRafRef = React.useRef(null);
+
+	React.useEffect(() => {
+		return () => {
+			if (clipLayoutRafRef.current) {
+				cancelAnimationFrame(clipLayoutRafRef.current);
+				clipLayoutRafRef.current = null;
+			}
+		};
+	}, []);
+
+	const scheduleClipLayoutCommit = nextLayout => {
+		pendingClipLayoutRef.current = nextLayout;
+		if (clipLayoutRafRef.current) return;
+		clipLayoutRafRef.current = requestAnimationFrame(() => {
+			clipLayoutRafRef.current = null;
+			if (pendingClipLayoutRef.current) {
+				setClipLayout(pendingClipLayoutRef.current);
+			}
+		});
+	};
+
+	const { clipperStyle, clipperMaskStyle, clippedMediaWrapperStyle, unClippedMediaWrapperStyle } = clipLayout;
+
+	const [mediaOffset, setMediaOffset] = React.useState({ x: null, y: null }),
 		[containerOverlayInfo, setContainerOverlayInfo] = React.useState(''),
 		[toolModeBeforeMediaRemoval, setToolModeBeforeMediaRemoval] = React.useState('divider'),
 		[userInputDevice, setUserInputDevice] = React.useState('mouse'),
@@ -166,6 +202,10 @@ function MediaContainer({
 			newToolSettings.toolOptions.auto = false;
 			newToolSettings.toolMode = 'divider';
 			setToolSettings(newToolSettings);
+			// setClipperStyle({
+			// 	width: mediaContainerElem.current ? `${Math.floor(mediaContainerElem.current.offsetWidth / 2)}px` : '50%',
+			// 	height: mediaContainerElem.current ? `${Math.floor(mediaContainerElem.current.offsetHeight / 2)}px` : '100%',
+			// });
 			clipMedia();
 			return;
 		}
@@ -196,60 +236,60 @@ function MediaContainer({
 	}, [leftMedia, rightMedia, firstRun]);
 
 	// Validate media compatibility when both metadata sets are available
-	// Run clipMedia and recalculate unified dimensions when metadata loads
+	// Recalculate unified dimensions when metadata loads
+	// Then run clipMedia to apply new dimensions
 	React.useEffect(() => {
 		if (!leftMediaMetaData || !rightMediaMetaData) {
 			setValidationWarnings([]);
-			return;
-		}
+		} else {
+			const warnings = [];
 
-		const warnings = [];
-
-		// Check 1: Mixed media types (video vs image)
-		if (leftMediaMetaData.mediaType !== rightMediaMetaData.mediaType) {
-			warnings.push({
-				type: 'mixedMediaTypes',
-				severity: 'error',
-				message: `Cannot compare ${leftMediaMetaData.mediaType} with ${rightMediaMetaData.mediaType}. Please select two files of the same type.`,
-			});
-		}
-
-		// Check 2: Different video durations
-		if (leftMediaMetaData.mediaType === 'video' && rightMediaMetaData.mediaType === 'video') {
-			const durationDiff = Math.abs(leftMediaMetaData.duration - rightMediaMetaData.duration);
-			if (durationDiff > 0.1) {
-				// More than 0.1 second difference
+			// Check 1: Mixed media types (video vs image)
+			if (leftMediaMetaData.mediaType !== rightMediaMetaData.mediaType) {
 				warnings.push({
-					type: 'differentDurations',
-					severity: 'warning',
-					message: `Videos have different durations: ${leftMediaMetaData.duration.toFixed(2)}s vs ${rightMediaMetaData.duration.toFixed(2)}s. The shorter video will display its last frame after it ends.`,
+					type: 'mixedMediaTypes',
+					severity: 'error',
+					message: `Cannot compare ${leftMediaMetaData.mediaType} with ${rightMediaMetaData.mediaType}. Please select two files of the same type.`,
 				});
 			}
 
-			// Check 3: Different framerates
-			if (leftMediaMetaData.framerate && rightMediaMetaData.framerate) {
-				if (leftMediaMetaData.framerate !== rightMediaMetaData.framerate) {
-					const maxFramerate = Math.max(leftMediaMetaData.framerate, rightMediaMetaData.framerate);
+			// Check 2: Different video durations
+			if (leftMediaMetaData.mediaType === 'video' && rightMediaMetaData.mediaType === 'video') {
+				const durationDiff = Math.abs(leftMediaMetaData.duration - rightMediaMetaData.duration);
+				if (durationDiff > 0.1) {
+					// More than 0.1 second difference
 					warnings.push({
-						type: 'differentFramerates',
-						severity: 'info',
-						message: `Videos have different framerates: ${leftMediaMetaData.framerate}fps vs ${rightMediaMetaData.framerate}fps. Using ${maxFramerate}fps for playback controls.`,
+						type: 'differentDurations',
+						severity: 'warning',
+						message: `Videos have different durations: ${leftMediaMetaData.duration.toFixed(2)}s vs ${rightMediaMetaData.duration.toFixed(2)}s. The shorter video will display its last frame after it ends.`,
 					});
 				}
+
+				// Check 3: Different framerates
+				if (leftMediaMetaData.framerate && rightMediaMetaData.framerate) {
+					if (leftMediaMetaData.framerate !== rightMediaMetaData.framerate) {
+						const maxFramerate = Math.max(leftMediaMetaData.framerate, rightMediaMetaData.framerate);
+						warnings.push({
+							type: 'differentFramerates',
+							severity: 'info',
+							message: `Videos have different framerates: ${leftMediaMetaData.framerate}fps vs ${rightMediaMetaData.framerate}fps. Using ${maxFramerate}fps for playback controls.`,
+						});
+					}
+				}
 			}
-		}
 
-		// Check 4: Different dimensions
-		const dimensionsDiffer = leftMediaMetaData.width !== rightMediaMetaData.width || leftMediaMetaData.height !== rightMediaMetaData.height;
-		if (dimensionsDiffer) {
-			warnings.push({
-				type: 'differentDimensions',
-				severity: 'info',
-				message: `Media files have different dimensions: ${leftMediaMetaData.width}×${leftMediaMetaData.height} vs ${rightMediaMetaData.width}×${rightMediaMetaData.height}. Both will be scaled to match the larger dimensions.`,
-			});
-		}
+			// Check 4: Different dimensions
+			const dimensionsDiffer = leftMediaMetaData.width !== rightMediaMetaData.width || leftMediaMetaData.height !== rightMediaMetaData.height;
+			if (dimensionsDiffer) {
+				warnings.push({
+					type: 'differentDimensions',
+					severity: 'info',
+					message: `Media files have different dimensions: ${leftMediaMetaData.width}×${leftMediaMetaData.height} vs ${rightMediaMetaData.width}×${rightMediaMetaData.height}. Both will be scaled to match the larger dimensions.`,
+				});
+			}
 
-		setValidationWarnings(warnings);
+			setValidationWarnings(warnings);
+		}
 
 		let unifiedWidth = 0,
 			unifiedHeight = 0,
@@ -275,15 +315,14 @@ function MediaContainer({
 			unifiedFramerate = rightMediaMetaData.framerate || 0;
 		}
 
-		console.log(`Unified Dim: ${unifiedWidth} | ${unifiedHeight} (${unifiedAspectRatio})\nUnified Fr: ${unifiedFramerate}`);
-
 		setUnifiedMediaDimensions({ width: unifiedWidth, height: unifiedHeight, aspectRatio: unifiedAspectRatio, framerate: unifiedFramerate });
 	}, [leftMediaMetaData, rightMediaMetaData]);
 
 	// When unified media dimensions change, re-clip media
+	// When the size of the cutout changes, re-clip the media
 	React.useEffect(() => {
 		clipMedia();
-	}, [unifiedMediaDimensions]);
+	}, [unifiedMediaDimensions, toolSettings.toolOptions.value]);
 
 	// Updates the playback speed of the videos (images don't have playback speed)
 	React.useEffect(() => {
@@ -362,21 +401,17 @@ function MediaContainer({
 
 		if (rightMediaMetaData && leftMediaMetaData) {
 			if (renderedDimsDiffer) {
-
-                if (leftDims.width > rightDims.width) {
-                    zoomSpecialPoint.left = specialZoomPoint ? `[${specialZoomPoint}]` : '';
-                } else if (rightDims.width > leftDims.width) {
-                    zoomSpecialPoint.right = specialZoomPoint ? `[${specialZoomPoint}]` : '';
-                }
+				if (leftDims.width > rightDims.width) {
+					zoomSpecialPoint.left = specialZoomPoint ? `[${specialZoomPoint}]` : '';
+				} else if (rightDims.width > leftDims.width) {
+					zoomSpecialPoint.right = specialZoomPoint ? `[${specialZoomPoint}]` : '';
+				}
 
 				zoomInfo += `<h6>L: ${leftRendered.width}px <small>⨉</small> ${leftRendered.height}px ${zoomSpecialPoint.left}</h6>`;
 
 				zoomInfo += `<h6>R: ${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px ${zoomSpecialPoint.right}</h6>`;
-
 			} else {
-
 				zoomInfo += `<h6>${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px ${zoomSpecialPoint.right}</h6>`;
-
 			}
 		} else {
 			zoomInfo += `<h6>${rightRendered.width}px <small>⨉</small> ${rightRendered.height}px ${zoomSpecialPoint.right}</h6>`;
@@ -384,11 +419,6 @@ function MediaContainer({
 
 		displayOverlayInfo(zoomInfo);
 	}, [toolSettings.zoomScale, rightMediaMetaData, leftMediaMetaData, unifiedMediaDimensions]);
-
-	// When the size of the cutout changes, re-clip the media
-	React.useEffect(() => {
-		clipMedia();
-	}, [toolSettings.toolOptions.value]);
 
 	const getBoundedOffset = offset => {
 		if (!rightMediaMetaData || !mediaContainerElem.current) return offset;
@@ -593,23 +623,19 @@ function MediaContainer({
 		const mediaContElem = mediaContainerElem.current;
 		if (!mediaContElem) return;
 
+		const baseLayout = pendingClipLayoutRef.current || clipLayoutRef.current;
+
 		// Use custom offset if provided, otherwise use state offset
 		const currentOffset = customOffset !== null ? customOffset : mediaOffset;
 
-		// Detect if media is portrait or landscape, default to
-		const mediaMajorDimension = unifiedMediaDimensions.aspectRatio >= 1 ? 'height' : 'width';
-
-		const containerOffset = {
-			left: mediaContElem.getBoundingClientRect().left,
-			top: mediaContElem.getBoundingClientRect().top,
-		};
+		const containerDims = mediaContElem.getBoundingClientRect();
 
 		// Get the cursor position based on the event or set it to the center of the container
-		let cursor = { x: event ? event.pageX : mediaContElem.offsetWidth / 2, y: event ? event.pageY : mediaContElem.offsetHeight / 2 };
+		let cursor = { x: event ? event.pageX : containerDims.width / 2, y: event ? event.pageY : containerDims.height / 2 };
 
 		let clipperPos = {
-			x: clipperPosition.x,
-			y: clipperPosition.y,
+			x: (clipperPositionRef.current.x ?? baseLayout.clipperPosition.x) || containerDims.width / 2,
+			y: (clipperPositionRef.current.y ?? baseLayout.clipperPosition.y) || containerDims.height / 2,
 		};
 
 		// Only update divider position from direct pointer movement (or autoscan).
@@ -619,138 +645,183 @@ function MediaContainer({
 		// If the tool is not in stick mode and a qualifying event is passed, update the clipper position to use the event data
 		if (shouldUpdateClipperFromEvent) {
 			clipperPos = {
-				// Calculate position as percentage of container dimensions
-				x: ((cursor.x - containerOffset.left) / mediaContElem.offsetWidth) * 100,
-				y: ((cursor.y - containerOffset.top) / mediaContElem.offsetHeight) * 100,
+				x: cursor.x - containerDims.left,
+				y: cursor.y - containerDims.top,
 			};
 		}
 
-		setClipperPosition(clipperPos);
+		// Update ref immediately for subsequent events.
+		clipperPositionRef.current = clipperPos;
+
+		const mediaContElemOffset = {
+			X: containerDims.width,
+			Y: containerDims.height,
+		};
+
+		const zoom = toolSettings.zoomScale || 1;
+
+		// Set media wrapper dimensions
+		const mediaWrapperWidth = unifiedMediaDimensions.width * zoom;
+		const mediaWrapperHeight = unifiedMediaDimensions.height * zoom;
+
+		let nextClipperStyle = baseLayout.clipperStyle;
+		let nextClipperMaskStyle = baseLayout.clipperMaskStyle;
+		let nextClippedStyle = baseLayout.clippedMediaWrapperStyle;
+		let nextUnclippedStyle = baseLayout.unClippedMediaWrapperStyle;
 
 		if (toolSettings.toolMode === 'divider' || toolSettings.toolMode === 'horizontalDivider') {
 			const dividerAxis = toolSettings.toolMode === 'divider' ? 'X' : 'Y';
 			const dividerOrtho = dividerAxis === 'X' ? 'Y' : 'X';
 
-			let position = dividerAxis === 'X' ? clipperPos.x : clipperPos.y;
-			const mediaContElemOffset = dividerAxis === 'X' ? mediaContElem.offsetWidth : mediaContElem.offsetHeight;
+			const rawPosition = dividerAxis === 'X' ? Math.min(clipperPos.x, containerDims.width) : Math.min(clipperPos.y, containerDims.height);
+			// Align to device pixels to reduce subpixel shimmering.
+			const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1;
+			const position = Math.max(0, Math.round(rawPosition * dpr) / dpr);
+			const LOCK_SWAP_THRESHOLD_PX = 56;
 
-			let clipperStyle = dividerAxis === 'X' ? { width: position + '%' } : { height: position + '%' };
+			// Keep clipper full-size and reveal the clipped region via clip-path on an inner mask.
+			// This prevents the clipped media from needing a half-width compensation move
+			// and ensures UI (divider line + lock) are not clipped.
+			if (dividerAxis === 'X') {
+				const rightInset = Math.max(0, containerDims.width - position);
+				const lockDirX = position < LOCK_SWAP_THRESHOLD_PX ? 1 : -1; // -1 = left of line, 1 = right of line
+				nextClipperStyle = {
+					width: '100%',
+					height: '100%',
+					'--divider-pos': `${position}px`,
+					'--lock-dir-x': String(lockDirX),
+				};
+				nextClipperMaskStyle = {
+					width: '100%',
+					height: '100%',
+					overflow: 'hidden',
+					clipPath: `inset(0px ${rightInset}px 0px 0px)`,
+					WebkitClipPath: `inset(0px ${rightInset}px 0px 0px)`,
+				};
+			} else {
+				const bottomInset = Math.max(0, containerDims.height - position);
+				const lockDirY = position < LOCK_SWAP_THRESHOLD_PX ? 1 : -1; // -1 = above line, 1 = below line
+				nextClipperStyle = {
+					width: '100%',
+					height: '100%',
+					'--divider-pos': `${position}px`,
+					'--lock-dir-y': String(lockDirY),
+				};
+				nextClipperMaskStyle = {
+					width: '100%',
+					height: '100%',
+					overflow: 'hidden',
+					clipPath: `inset(0px 0px ${bottomInset}px 0px)`,
+					WebkitClipPath: `inset(0px 0px ${bottomInset}px 0px)`,
+				};
+			}
 
-			//* Clipper Style
-			if (leftMediaMetaData && rightMediaMetaData) setClipperStyle(clipperStyle);
+			const mediaAxisValue = currentOffset[dividerAxis.toLowerCase()] - (dividerAxis === 'X' ? mediaWrapperWidth : mediaWrapperHeight) / 2;
+			const mediaOrthoValue = currentOffset[dividerOrtho.toLowerCase()] - (dividerAxis === 'X' ? mediaWrapperHeight : mediaWrapperWidth) / 2;
+			const mediaTranslateAxis = `translate${dividerAxis}(${mediaAxisValue}px)`;
+			const mediaTranslateOrtho = `translate${dividerOrtho}(${mediaOrthoValue}px)`;
 
-			const clipperCenterPercent = position / 2;
-			const adjustment = (50 - clipperCenterPercent) / 100;
-			const clipperOffsetAdjustment = mediaContElemOffset * adjustment;
-
-			// Media: applies pan offset + clipper adjustment
 			const mediaWrapperStyle = {
 				left: '50%',
 				top: '50%',
+				width: mediaWrapperWidth,
+				height: mediaWrapperHeight,
+				transform: `${mediaTranslateAxis} ${mediaTranslateOrtho}`,
 			};
-
-			// Set media wrapper dimensions
-			mediaWrapperStyle.width = Math.round(unifiedMediaDimensions.width * toolSettings.zoomScale) + 'px';
-			mediaWrapperStyle.height = Math.round(unifiedMediaDimensions.height * toolSettings.zoomScale) + 'px';
-
-			const mediaMinorValue = Math.round(currentOffset[dividerOrtho.toLowerCase()]);
-			const mediaMajorValue = Math.round(currentOffset[dividerAxis.toLowerCase()]);
-			const clippedMediaMajorValue = clipperOffsetAdjustment + Math.round(currentOffset[dividerAxis.toLowerCase()]);
-
-			let mediaTranslateMinor = `translate${dividerOrtho}(calc(-50% + ${mediaMinorValue}px))`;
-			let mediaTranslateMajor = `translate${dividerAxis}(calc(-50% + ${mediaMajorValue}px))`;
-			let clippedMediaTranslateMajor = `translate${dividerAxis}(calc(-50% + ${clippedMediaMajorValue}px))`;
-
-			mediaWrapperStyle.transform = `${mediaTranslateMajor} ${mediaTranslateMinor}`;
 
 			const clippedMediaWrapperStyle = {
 				...mediaWrapperStyle,
-				transform: `${clippedMediaTranslateMajor} ${mediaTranslateMinor}`,
-                opacity: '100%',
+				opacity: '100%',
 			};
 
-			//* Clipped Media Style
-			if (leftMediaMetaData) {
-				setClippedMediaWrapperStyle(clippedMediaWrapperStyle);
-			}
-
-			//* Unclipped Media Style
-			if (rightMediaMetaData) {
-				setUnClippedMediaWrapperStyle(mediaWrapperStyle);
-			}
+			// Keep existing styles if metadata isn't ready yet.
+			if (leftMediaMetaData) nextClippedStyle = clippedMediaWrapperStyle;
+			if (rightMediaMetaData) nextUnclippedStyle = mediaWrapperStyle;
 		}
 
-        // Cutout tools
+		// Cutout tools
 		if (toolSettings.toolMode === 'circleCutout' || toolSettings.toolMode === 'boxCutout') {
 			const cutoutSettings = {
 				radius: toolSettings.toolOptions.value[toolSettings.toolMode],
 			};
 
 			const cutoutClipperStyle = {
-				width: `${cutoutSettings.radius * 2}px`,
-				height: `${cutoutSettings.radius * 2}px`,
-				left: `${clipperPos.x}%`,
-				top: `${clipperPos.y}%`,
+				width: cutoutSettings.radius * 2,
+				height: cutoutSettings.radius * 2,
+				left: clipperPos.x - cutoutSettings.radius,
+				top: clipperPos.y - cutoutSettings.radius,
 			};
 
 			// Clipper bounds
-			if (clipperPos.x < 0) cutoutClipperStyle.left = `0%`;
-			if (clipperPos.x > 100) cutoutClipperStyle.left = `100%`;
-			if (clipperPos.y < 0) cutoutClipperStyle.top = `0%`;
-			if (clipperPos.y > 100) cutoutClipperStyle.top = `100%`;
+			if (clipperPos.x < 0) cutoutClipperStyle.left = -cutoutSettings.radius;
+			if (clipperPos.x > containerDims.width) cutoutClipperStyle.left = containerDims.width - cutoutSettings.radius;
+			if (clipperPos.y < 0) cutoutClipperStyle.top = -cutoutSettings.radius;
+			if (clipperPos.y > containerDims.height) cutoutClipperStyle.top = containerDims.height - cutoutSettings.radius;
 
-			if (leftMediaMetaData && rightMediaMetaData) setClipperStyle(cutoutClipperStyle);
+			const mediaTranslateX = currentOffset.x - mediaWrapperWidth / 2;
+			const mediaTranslateY = currentOffset.y - mediaWrapperHeight / 2;
+			const cutoutTranslateX = mediaTranslateX + (containerDims.width / 2 - cutoutClipperStyle.left - cutoutSettings.radius);
+			const cutoutTranslateY = mediaTranslateY + (containerDims.height / 2 - cutoutClipperStyle.top - cutoutSettings.radius);
 
-			const cutoutMediaStyle = {
-				zIndex: 3,
-                opacity: '100%',
+			const mediaTranslateValue = `translateX(${mediaTranslateX}px) translateY(${mediaTranslateY}px)`;
+			const cutoutMediaTranslateValue = `translateX(${cutoutTranslateX}px) translateY(${cutoutTranslateY}px)`;
+
+			const mediaWrapperStyle = {
+				left: '50%',
+				top: '50%',
+				width: mediaWrapperWidth,
+				height: mediaWrapperHeight,
+				transform: mediaTranslateValue,
 			};
 
-			cutoutMediaStyle.width = Math.round(unifiedMediaDimensions.width * toolSettings.zoomScale) + 'px';
-			cutoutMediaStyle.height = Math.round(unifiedMediaDimensions.height * toolSettings.zoomScale) + 'px';
-
-			const mediaTranslateX = Math.round(currentOffset.x - ((clipperPos.x / 100) * mediaContElem.offsetWidth - mediaContElem.offsetWidth / 2));
-			const mediaTranslateY = Math.round(currentOffset.y - ((clipperPos.y / 100) * mediaContElem.offsetHeight - mediaContElem.offsetHeight / 2));
-
-			cutoutMediaStyle.transform = `translateX(calc(-50% + ${mediaTranslateX}px)) translateY(calc(-50% + ${mediaTranslateY}px))`;
-
-			// Wrapper: controls media sizing, centered in clipper
-			setClippedMediaWrapperStyle(cutoutMediaStyle);
-
-			// Right media wrapper: standard full size, centered in container
-			const notCutoutMediaStyle = {
-				width: `${Math.round(toolSettings.zoomScale * unifiedMediaDimensions.width)}px`,
-				height: `${Math.round(toolSettings.zoomScale * unifiedMediaDimensions.height)}px`,
-				transform: `translateX(calc(-50% + ${Math.round(currentOffset.x)}px)) translateY(calc(-50% + ${Math.round(currentOffset.y)}px))`,
+			const cutoutWrapperStyle = {
+				...mediaWrapperStyle,
+				transform: cutoutMediaTranslateValue,
+				opacity: '100%',
 			};
 
-			setUnClippedMediaWrapperStyle(notCutoutMediaStyle);
+			if (leftMediaMetaData) nextClippedStyle = cutoutWrapperStyle;
+			if (rightMediaMetaData) nextUnclippedStyle = mediaWrapperStyle;
+			nextClipperStyle = cutoutClipperStyle;
+			nextClipperMaskStyle = { width: '100%', height: '100%', overflow: 'hidden' };
 		}
 
-        // Overlay tool
-        if (toolSettings.toolMode === 'overlay') {
-            setClipperStyle({
-                width: '100%',
-                height: '100%',
-            });
+		// Overlay tool
+		if (toolSettings.toolMode === 'overlay') {
+			nextClipperStyle = {
+				width: '100%',
+				height: '100%',
+			};
 
-            const mediaStyle = {
-                width: `${Math.round(toolSettings.zoomScale * unifiedMediaDimensions.width)}px`,
-                height: `${Math.round(toolSettings.zoomScale * unifiedMediaDimensions.height)}px`,
-                transform: `translateX(calc(-50% + ${Math.round(currentOffset.x)}px)) translateY(calc(-50% + ${Math.round(currentOffset.y)}px))`,
-            };
+			const mediaTranslateX = currentOffset.x - mediaWrapperWidth / 2;
+			const mediaTranslateY = currentOffset.y - mediaWrapperHeight / 2;
 
-            const opacityValue = toolSettings.toolOptions.value.overlay;
-            const overlayMediaStyle = {
-                ...mediaStyle,
-                opacity: `${opacityValue * 100}%`,
-            };
+			const mediaStyle = {
+				left: '50%',
+				top: '50%',
+				width: `${toolSettings.zoomScale * unifiedMediaDimensions.width}px`,
+				height: `${toolSettings.zoomScale * unifiedMediaDimensions.height}px`,
+				transform: `translateX(${mediaTranslateX}px) translateY(${mediaTranslateY}px)`,
+			};
 
-            console.log(overlayMediaStyle);
+			const opacityValue = toolSettings.toolOptions.value.overlay;
+			const overlayMediaStyle = {
+				...mediaStyle,
+				opacity: `${opacityValue * 100}%`,
+			};
 
-            setClippedMediaWrapperStyle(overlayMediaStyle);
-            setUnClippedMediaWrapperStyle(mediaStyle);
-        }
+			nextClippedStyle = overlayMediaStyle;
+			nextUnclippedStyle = mediaStyle;
+			nextClipperMaskStyle = { width: '100%', height: '100%', overflow: 'hidden' };
+		}
+
+		scheduleClipLayoutCommit({
+			clipperPosition: clipperPos,
+			clipperStyle: nextClipperStyle,
+			clipperMaskStyle: nextClipperMaskStyle,
+			clippedMediaWrapperStyle: nextClippedStyle,
+			unClippedMediaWrapperStyle: nextUnclippedStyle,
+		});
 	};
 
 	// Ensure interval callbacks can always call the latest clipMedia implementation.
@@ -1325,21 +1396,21 @@ function MediaContainer({
 		if (isInElectron && Date.now() - (lastWindowFocusAtRef.current || 0) < FOCUS_CLICK_IGNORE_MS) return;
 		if (e.target.id !== 'mediaContainer' && e.target.parentElement.id !== 'mediaContainer' && e.target.parentElement.id !== 'videoClipper') return;
 		if (!leftMedia || !rightMedia) return;
-        if (toolSettings.toolMode === 'overlay') return;
+		if (toolSettings.toolMode === 'overlay') return;
 		if (toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto) return;
 		setToolSettings({ ...toolSettings, stick: !toolSettings.stick });
 
-        // Detect double click to reset clipper position
-        const now = Date.now();
-        const timeSinceLastClick = now - lastMiddleClickTimeRef.current;
-        if (timeSinceLastClick < appSettings.doubleClickSpeed) {
-            // Double-click detected - reset clipper position
-            setClipperPos({ x: 50, y: 50 });
-            lastMiddleClickTimeRef.current = 0;
-            setToolSettings({ ...toolSettings, stick: true });
-            clipMedia();
-            return;
-        }
+		// Detect double click to reset clipper position
+		const now = Date.now();
+		const timeSinceLastClick = now - lastMiddleClickTimeRef.current;
+		if (timeSinceLastClick < appSettings.doubleClickSpeed) {
+			// Double-click detected - reset clipper position
+			setClipperPos({ x: 50, y: 50 });
+			lastMiddleClickTimeRef.current = 0;
+			setToolSettings({ ...toolSettings, stick: true });
+			clipMedia();
+			return;
+		}
 	};
 
 	const getCurrentFrame = media => {
@@ -1480,23 +1551,25 @@ function MediaContainer({
 					toolSettings.toolMode === 'divider' && toolSettings.toolOptions.auto ? ' auto' : ''
 				}`}>
 				<ClipperLock id="clipperLock" locked={toolSettings.stick} />
-				{leftMedia &&
-					(leftMediaType === 'video' ? (
-						<VideoJSPlayer
-							videoRef={leftMediaElem}
-							id="left-video"
-							style={clippedMediaWrapperStyle}
-							onLoadedMetadata={handleLoadedMetadata}
-							src={leftMedia || ''}
-							loop={toolSettings.playerLoop}
-							onEnded={() => PlayerControls.pause()}
-							muted={toolSettings.playerAudio.left.muted}
-							volume={toolSettings.playerAudio.left.volume}
-							playbackRate={toolSettings.playerSpeed}
-						/>
-					) : (
-						<ImagePlayer imageRef={leftMediaElem} id="left-image" onLoad={handleLoadedMetadata} src={leftMedia || ''} style={clippedMediaWrapperStyle} />
-					))}
+				<div className="clipper-mask" style={clipperMaskStyle}>
+					{leftMedia &&
+						(leftMediaType === 'video' ? (
+							<VideoJSPlayer
+								videoRef={leftMediaElem}
+								id="left-video"
+								style={clippedMediaWrapperStyle}
+								onLoadedMetadata={handleLoadedMetadata}
+								src={leftMedia || ''}
+								loop={toolSettings.playerLoop}
+								onEnded={() => PlayerControls.pause()}
+								muted={toolSettings.playerAudio.left.muted}
+								volume={toolSettings.playerAudio.left.volume}
+								playbackRate={toolSettings.playerSpeed}
+							/>
+						) : (
+							<ImagePlayer imageRef={leftMediaElem} id="left-image" onLoad={handleLoadedMetadata} src={leftMedia || ''} style={clippedMediaWrapperStyle} />
+						))}
+				</div>
 			</div>
 			{leftMedia && rightMedia && (
 				<PlayerSlider

@@ -224,10 +224,54 @@ const loadAndMigrateAppSettings = () => {
 // 	swapScrollDirections: false,
 // };
 
-// Check if running in Electron or browser
-// In Electron, window.api is exposed by the preload script
-const isInElectron = !!(typeof window !== 'undefined' && window.api && window.api.openFile);
+// Check if running in Electron or browser.
+// Prefer runtime detection (process.versions.electron) over preload presence,
+// since a missing/failed preload would incorrectly put the app into "browser mode"
+// and force the File System Access API (which cannot provide real file paths).
+const isElectronRuntime = !!(typeof process !== 'undefined' && process?.versions?.electron);
+const hasPreloadApi = !!(typeof window !== 'undefined' && window?.api && typeof window.api.openFile === 'function');
+const isInElectron = isElectronRuntime || hasPreloadApi;
 const isInBrowser = !isInElectron;
+
+const toFetchableFileUrl = maybePath => {
+	if (typeof maybePath !== 'string') return null;
+	const raw = maybePath.trim();
+	if (!raw) return null;
+	// Already a URL we can fetch.
+	if (/^(app|file):\/\//i.test(raw)) return raw;
+
+	// Windows drive path: C:\foo\bar.mp4 -> file:///C:/foo/bar.mp4
+	if (/^[A-Za-z]:[\\/]/.test(raw)) {
+		const normalized = raw.replace(/\\/g, '/');
+		return `file:///${encodeURI(normalized)}`;
+	}
+
+	// UNC path: \\server\share\file.mp4 -> file://server/share/file.mp4
+	if (/^\\\\[^\\]+\\[^\\]+/.test(raw)) {
+		const withoutSlashes = raw.replace(/^\\\\/, '');
+		const normalized = withoutSlashes.replace(/\\/g, '/');
+		return `file://${encodeURI(normalized)}`;
+	}
+
+	// POSIX absolute path: /home/user/file.mp4 -> file:///home/user/file.mp4
+	if (raw.startsWith('/')) {
+		return `file://${encodeURI(raw)}`;
+	}
+
+	return null;
+};
+
+const fileUrlToPath = fileUrl => {
+	if (typeof fileUrl !== 'string' || !fileUrl.startsWith('file://')) return null;
+	try {
+		let p = decodeURIComponent(new URL(fileUrl).pathname);
+		// Windows file:// URLs include a leading slash before drive letter.
+		if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1);
+		return p;
+	} catch {
+		return null;
+	}
+};
 
 const detectUserOS = (() => {
 	if (typeof navigator !== 'undefined') {
@@ -238,8 +282,6 @@ const detectUserOS = (() => {
 	}
 	return 'unknown';
 })();
-
-console.log(`Electron: ${isInElectron} | Browser: ${isInBrowser} | OS: ${detectUserOS}`);
 
 function MainContainer() {
 	const defaultPlaybackStatus = {
@@ -276,6 +318,8 @@ function MainContainer() {
 	// Modal props are snapshotted at open time; use refs so modal content can always read latest settings.
 	const toolSettingsRef = React.useRef(toolSettings);
 	const appSettingsRef = React.useRef(appSettings);
+	const hadLeftMediaRef = React.useRef(false);
+	const hadRightMediaRef = React.useRef(false);
 	// Update refs synchronously so any open modal reads the latest values
 	// during the same render that committed state changes.
 	toolSettingsRef.current = toolSettings;
@@ -744,6 +788,12 @@ function MainContainer() {
 	// Restore files from saved paths in Electron
 	React.useEffect(() => {
 		if (!isInBrowser) {
+			// Respect user setting: allow keeping the remembered paths in localStorage,
+			// but don't automatically reload media into the UI.
+			if (appSettingsRef.current?.reloadMediaFilesOnLaunch === false) {
+				return;
+			}
+
 			const restoreElectronFiles = async () => {
 				const leftPath = localStorage.getItem('leftMediaPath');
 				const rightPath = localStorage.getItem('rightMediaPath');
@@ -751,92 +801,90 @@ function MainContainer() {
 				// Restore left media from path
 				if (leftPath) {
 					try {
-						const response = await fetch(leftPath);
-						const arrayBuffer = await response.arrayBuffer();
-
-						// Determine media type from file extension
+						const fileUrl = toFetchableFileUrl(leftPath);
+						if (!fileUrl) throw new Error('Invalid stored leftMediaPath');
+						const fileName = leftPath.split(/[/\\]/).pop();
 						const ext = leftPath.split('.').pop().toLowerCase();
 						const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
-						const mimeType = isImage ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : 'video/mp4';
-
-						const blob = new Blob([arrayBuffer], { type: mimeType });
-						const blobUrl = URL.createObjectURL(blob);
-
-						// Extract filename from path
-						const fileName = leftPath.split(/[/\\]/).pop();
-						saveFileMetadata(blobUrl, {
-							fileName: fileName,
+						saveFileMetadata(fileUrl, {
+							fileName,
 							filePath: leftPath,
 							mediaType: isImage ? 'image' : 'video',
-							fileSize: typeof arrayBuffer?.byteLength === 'number' ? arrayBuffer.byteLength : null,
+							fileSize: null,
 						});
-
-						setLeftMedia(blobUrl);
+						setLeftMedia(fileUrl);
 					} catch (error) {
 						console.error('Error restoring left media:', error);
 						// Clear invalid path
-						localStorage.setItem('leftMediaPath', '');
+						localStorage.removeItem('leftMediaPath');
 					}
 				}
 
 				// Restore right media from path
 				if (rightPath) {
 					try {
-						const response = await fetch(rightPath);
-						const arrayBuffer = await response.arrayBuffer();
-
-						// Determine media type from file extension
+						const fileUrl = toFetchableFileUrl(rightPath);
+						if (!fileUrl) throw new Error('Invalid stored rightMediaPath');
+						const fileName = rightPath.split(/[/\\]/).pop();
 						const ext = rightPath.split('.').pop().toLowerCase();
 						const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
-						const mimeType = isImage ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : 'video/mp4';
-
-						const blob = new Blob([arrayBuffer], { type: mimeType });
-						const blobUrl = URL.createObjectURL(blob);
-
-						// Extract filename from path
-						const fileName = rightPath.split(/[/\\]/).pop();
-						saveFileMetadata(blobUrl, {
-							fileName: fileName,
+						saveFileMetadata(fileUrl, {
+							fileName,
 							filePath: rightPath,
 							mediaType: isImage ? 'image' : 'video',
-							fileSize: typeof arrayBuffer?.byteLength === 'number' ? arrayBuffer.byteLength : null,
+							fileSize: null,
 						});
-
-						setRightMedia(blobUrl);
+						setRightMedia(fileUrl);
 					} catch (error) {
 						console.error('Error restoring right media:', error);
-						// Clear invalid path
-						localStorage.setItem('rightMediaPath', '');
+						localStorage.removeItem('rightMediaPath');
 					}
 				}
 			};
 
 			restoreElectronFiles();
 		}
-	}, [isInBrowser]);
+	}, [isInBrowser, appSettings?.reloadMediaFilesOnLaunch]);
 
 	// In Electron, save left file path (not blob URL) to localStorage
 	React.useEffect(() => {
-		if (!isInBrowser && leftMedia) {
+		if (isInBrowser) return;
+
+		if (leftMedia) {
+			hadLeftMediaRef.current = true;
 			const metadata = getFileMetadata(leftMedia);
-			if (metadata?.filePath) {
-				localStorage.setItem('leftMediaPath', metadata.filePath);
+			const derivedPath = fileUrlToPath(leftMedia);
+			const pathToSave = metadata?.filePath || derivedPath;
+			if (pathToSave) {
+				localStorage.setItem('leftMediaPath', pathToSave);
 			}
-		} else if (!leftMedia) {
-			// Clear if media is removed
+			return;
+		}
+
+		// Only clear the stored path if the user previously had media loaded
+		// and then removed it. This avoids wiping persisted paths on app startup
+		// before the restore effect runs.
+		if (hadLeftMediaRef.current) {
 			localStorage.removeItem('leftMediaPath');
 		}
 	}, [leftMedia, isInBrowser]);
 
 	// In Electron, save right file path (not blob URL) to localStorage
 	React.useEffect(() => {
-		if (!isInBrowser && rightMedia) {
+		if (isInBrowser) return;
+
+		if (rightMedia) {
+			hadRightMediaRef.current = true;
 			const metadata = getFileMetadata(rightMedia);
-			if (metadata?.filePath) {
-				localStorage.setItem('rightMediaPath', metadata.filePath);
+			const derivedPath = fileUrlToPath(rightMedia);
+			const pathToSave = metadata?.filePath || derivedPath;
+			if (pathToSave) {
+				localStorage.setItem('rightMediaPath', pathToSave);
 			}
-		} else if (!rightMedia) {
-			// Clear if media is removed
+			return;
+		}
+
+		if (hadRightMediaRef.current) {
 			localStorage.removeItem('rightMediaPath');
 		}
 	}, [rightMedia, isInBrowser]);

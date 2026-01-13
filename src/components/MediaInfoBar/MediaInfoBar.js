@@ -6,18 +6,38 @@ import PlayerSlider from '../PlayerSlider';
 const capitalize = str => str.charAt(0).toUpperCase() + str.slice(1);
 
 function MediaInfoBar({ toolSettings, setToolSettings, mediaSource, setMediaSource, mediaMetaData, mediaType, mediaSide, isInBrowser, openMediaFile, setCurrentModal, ...props }) {
+
+    const mediaSideLabel = (() => {
+        switch (toolSettings.toolMode) {
+            case 'divider':
+                return mediaSide === 'left' ? 'Left' : 'Right';
+            case 'horizontalDivider':
+                return mediaSide === 'left' ? 'Top' : 'Bottom';
+            case 'circleCutout':
+            case 'boxCutout':
+                return mediaSide === 'left' ? 'Inside' : 'Outside';
+            case 'overlay':
+                return mediaSide === 'left' ? 'Foreground' : 'Background';
+            default:
+                return mediaSide;
+        }
+    })();
+
 	return (
 		<div className={`media-info ${mediaSide}-media-info`}>
 			<button className="media-closer" type="button" onClick={() => setMediaSource('')} title={`Close ${capitalize(mediaSide)} Media File`}>
 				<Icon name="X" />
 			</button>
-			<p
-				className="media-label"
-				onClick={!isInBrowser ? () => openMediaFile(mediaSource) : undefined}
-				style={{ cursor: isInBrowser ? 'default' : 'pointer' }}
-				title={`Open ${capitalize(mediaSide)} media file in file browser`}>
-				{mediaMetaData ? mediaMetaData.fileName : `${capitalize(mediaSide)} Media`}
-			</p>
+			<div className="media-label-container">
+                <small>{mediaSideLabel}</small>
+                <p
+                    className="media-label"
+                    onClick={!isInBrowser ? () => openMediaFile(mediaSource) : undefined}
+                    style={{ cursor: isInBrowser ? 'default' : 'pointer' }}
+                    title={`Open ${capitalize(mediaSide)} media file in file browser`}>
+                    {mediaMetaData ? mediaMetaData.fileName : `${capitalize(mediaSide)} Media`}
+                </p>
+            </div>
 			{mediaType === 'video' && (
 				<>
 					<button

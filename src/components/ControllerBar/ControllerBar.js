@@ -28,7 +28,7 @@ function ControllerBar({
 	PlayerControls,
 	leftMediaMetaData,
 	rightMediaMetaData,
-	viewportSize,
+	mainContainerSize,
 	isInElectron,
 	setCurrentModal,
 }) {
@@ -265,7 +265,7 @@ function ControllerBar({
 	const mediaVsContainerSizeCheck = () => {
 		const [leftMediaElement, rightMediaElement] = [leftMediaMetaData ? leftMediaMetaData.width : 0, rightMediaMetaData ? rightMediaMetaData.width : 0];
 
-		const viewPortWidth = viewportSize ? viewportSize.width : window.innerWidth;
+		const viewPortWidth = mainContainerSize ? mainContainerSize.width : window.innerWidth;
 
 		if (Math.max(leftMediaElement, rightMediaElement) > viewPortWidth) {
 			setWindowIsSmallerThanMedia(true);
@@ -278,7 +278,8 @@ function ControllerBar({
 		setHasAnyVideo(leftMediaType === 'video' || rightMediaType === 'video');
 		setHasBothMedia(!!leftMediaMetaData && !!rightMediaMetaData);
 		mediaVsContainerSizeCheck();
-	}, [viewportSize, leftMediaMetaData, rightMediaMetaData, toolSettings.controllerBarOptions.floating]);
+
+	}, [mainContainerSize, leftMediaMetaData, rightMediaMetaData, toolSettings.controllerBarOptions.floating]);
 
 	return (
 		<div id="controllerBar" className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${hasAnyVideo ? ' videos' : ''}`}>

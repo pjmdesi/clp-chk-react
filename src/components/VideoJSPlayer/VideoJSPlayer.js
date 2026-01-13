@@ -149,8 +149,9 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 		}
 	}, [volume]);
 
-	// Update styles on the wrapper for positioning
-	React.useEffect(() => {
+	// Update styles on the wrapper for positioning.
+	// Layout effect applies before paint, preventing visible jitter during rapid updates.
+	React.useLayoutEffect(() => {
 		if (wrapperRef.current && style) {
 			const wrapper = wrapperRef.current;
 			Object.keys(style).forEach(key => {
@@ -161,8 +162,9 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 		}
 	}, [style]);
 
-	// Update styles on the video element for transform/positioning
-	React.useEffect(() => {
+	// Update styles on the video element for transform/positioning.
+	// Layout effect applies before paint, preventing visible jitter during rapid updates.
+	React.useLayoutEffect(() => {
 		if (playerRef.current && videoStyle) {
 			const videoElement = playerRef.current.el().querySelector('video');
 			if (videoElement) {

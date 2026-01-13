@@ -1,14 +1,13 @@
 #mediaContainer {
 	--controller-offset: 40px;
 
+	&:has(+ #controllerBar.videos) {
+		--controller-offset: 72px;
+	}
 
-    &:has(+#controllerBar.videos) {
-        --controller-offset: 72px;
-    }
-
-    #mainContainer.floating-tools > & {
-        --controller-offset: 0px;
-    }
+	#mainContainer.floating-tools > & {
+		--controller-offset: 0px;
+	}
 
 	cursor: pointer;
 
@@ -26,7 +25,7 @@
 	box-shadow: 0 1px 6px 0px rgba($color: var(--black-rgb), $alpha: 0.8);
 
 	transition:
-        height var(--default-timing) ease-in-out,
+		height var(--default-timing) ease-in-out,
 		transform var(--default-timing) ease-in-out,
 		box-shadow var(--default-timing) ease-in-out,
 		border-radius var(--default-timing) ease-in-out;
@@ -65,18 +64,21 @@
 		}
 	}
 
-	&.empty,
-	&:has(.auto) {
-		cursor: default;
+	&.empty {
+		cursor: pointer;
 	}
 
-	&:has(#videoClipper.divider:not(.stuck)) {
+	&:has(#videoClipper.divider:not(.stuck):not(.auto)) {
 		cursor: ew-resize;
 	}
 
-	&:has(#videoClipper.horizontalDivider:not(.stuck)) {
+	&:has(#videoClipper.horizontalDivider:not(.stuck):not(.auto)) {
 		cursor: ns-resize;
 	}
+
+	&:has(#videoClipper.auto) {
+        cursor: default;
+    }
 
 	&.zoom-out-anim {
 		transform: scale(1.005);
@@ -104,7 +106,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: calc(4 * var(--spacing)) 0;
-        padding: var(--root-padding);
+		padding: var(--root-padding);
 
 		text-align: center;
 		justify-content: center;
@@ -156,48 +158,91 @@
 
 	#videoClipper {
 		position: relative;
-		background-color: var(--black);
+		// background-color: var(--black);
 		box-shadow: 2px 0 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
-
-		will-change: contents;
 
 		z-index: 0;
 
-        &.overlay {
-            box-shadow: none;
-            background-color: transparent;
-        }
+		&.overlay {
+			box-shadow: none;
+			background-color: transparent;
+		}
 
 		#clipperLock {
 			position: absolute;
 			inset: 50% var(--spacing) auto auto;
-			width: 1.5rem;
-			height: 1.5rem;
+			width: max-content;
+			height: max-content;
 
 			--shadow-size: 0.5px;
 
-			filter: drop-shadow(0 0 var(--shadow-size) var(--black)) drop-shadow(0 0 var(--shadow-size) var(--black)) drop-shadow(0 0 var(--shadow-size) var(--black))
-				drop-shadow(0 0 var(--shadow-size) var(--black)) drop-shadow(0 0 var(--shadow-size) var(--black));
+			filter: drop-shadow(0 0 var(--shadow-size) var(--black)) drop-shadow(0 0 var(--shadow-size) var(--black)) drop-shadow(0 0 var(--shadow-size) var(--black));
 
 			transform: translateY(-50%);
 
 			z-index: 4;
 		}
 
+        &.auto {
+            #clipperLock {
+                display: none;
+            }
+        }
+
 		&.empty {
 			background: var(--black);
 		}
 
 		&.divider {
-			box-shadow: 2px 0 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
+			box-shadow: none;
+			will-change: width;
+
+			#clipperLock {
+				// Attach to divider line (x), sit left of it by default.
+				// Flip to the right when close to the left edge (via --lock-dir-x set in JS).
+				inset: auto;
+				top: 50%;
+				left: clamp(var(--spacing), var(--divider-pos, 0px), calc(100% - var(--spacing)));
+				transform: translateX(calc((100% + var(--spacing)) * var(--lock-dir-x, -1))) translateY(-50%);
+			}
+
+			&::after {
+				content: '';
+				position: absolute;
+				top: 0;
+				bottom: 0;
+				left: calc(var(--divider-pos, 0px) - (var(--user-divider-thickness) / 2));
+				width: var(--user-divider-thickness);
+				background: var(--user-divider-color);
+				pointer-events: none;
+				z-index: 3;
+			}
 		}
 
 		&.horizontalDivider {
-			box-shadow: 0 2px 0 calc(var(--user-divider-thickness) - 1.5px) var(--user-divider-color);
+			box-shadow: none;
+
+			will-change: height;
+
+			&::after {
+				content: '';
+				position: absolute;
+				left: 0;
+				right: 0;
+				top: calc(var(--divider-pos, 0px) - (var(--user-divider-thickness) / 2));
+				height: var(--user-divider-thickness);
+				background: var(--user-divider-color);
+				pointer-events: none;
+				z-index: 3;
+			}
 
 			#clipperLock {
-				inset: auto auto var(--spacing) 50%;
-				transform: translateX(50%);
+				// Attach to divider line (y), sit above it by default.
+				// Flip below when close to the top edge (via --lock-dir-y set in JS).
+				inset: auto;
+				left: 50%;
+				top: clamp(var(--spacing), var(--divider-pos, 0px), calc(100% - var(--spacing)));
+				transform: translateX(-50%) translateY(calc((100% + var(--spacing)) * var(--lock-dir-y, -1)));
 			}
 		}
 
@@ -214,9 +259,11 @@
 		&.circleCutout {
 			// clip-path: circle(50% at 50% 50%);
 			overflow: hidden;
-			transform: translate(-50%, -50%);
+			// transform: translate(-50%, -50%);
 
 			box-shadow: 0 0 0 calc(var(--user-divider-thickness) + 0.75px) var(--user-divider-color);
+
+			will-change: width, height, left, top;
 
 			transition:
 				border-radius var(--default-timing) ease-in-out,
@@ -227,22 +274,29 @@
 			border-radius: 50%;
 		}
 
-        &.overlay {
-            #clipperLock {
-                display: none;
-            }
-        }
+		&.overlay {
+			#clipperLock {
+				display: none;
+			}
+		}
+
+		.clipper-mask {
+			position: absolute;
+			inset: 0;
+		}
 	}
 
 	// Wrapper receives positioning - acts like the video element did before
 	.videojs-wrapper,
 	.image-player-wrapper {
 		position: absolute;
-		left: 50%;
-		top: 50%;
-		transform: translate(-50%, -50%);
+		// left: 50%;
+		// top: 50%;
+		// transform: translate(-50%, -50%);
 		display: block;
 		pointer-events: none;
+
+		will-change: transform;
 
 		> div {
 			display: contents;
@@ -326,7 +380,7 @@
 	font-weight: 500;
 	background-color: var(--dark-blue);
 	border-radius: calc(var(--radius) + var(--spacing));
-    transform: translateX(-50%);
+	transform: translateX(-50%);
 
 	box-shadow:
 		0 3px 8px rgba($color: var(--white-rgb), $alpha: 0.1) inset,

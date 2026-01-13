@@ -35,6 +35,13 @@
 		flex: 1 0 auto;
 	}
 
+    small {
+        font-size: 0.66rem;
+        color: var(--white);
+        user-select: none;
+        opacity: 0.66;
+    }
+
     .control-slider-container {
         min-width: 160px;
         .unit-input-container {
@@ -48,6 +55,12 @@
 		flex-direction: row-reverse;
 		justify-content: flex-end;
 	}
+
+    .media-label-container {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
 
 	.media-label {
 		cursor: pointer;

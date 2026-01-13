@@ -124,7 +124,10 @@
         }
 	}
 
-	#transitionSpeedSlider,
+	#transitionSpeedSlider {
+		--min-width: 84px;
+	}
+
     #clipperSizeSlider {
 		--min-width: 62px;
 	}
