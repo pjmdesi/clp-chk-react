@@ -25,6 +25,47 @@ Available as a deployable web app, ClpChk offers the following features:
 
 You can download the latest release from the [Releases](https://github.com/pjmdesi/clp-chk-react/releases/latest) page. It is a purely [portable app](https://portableapps.com/about/what_is_a_portable_app), so installation is not required. Just download the exe and run it! You can even run it from a USB drive.
 
+## Web / Netlify
+
+This repo can also be built and deployed as a normal static web page (no Electron runtime), without forking or removing the Electron code.
+
+### Local web development
+
+Run the browser dev server:
+
+```sh
+npm run dev:web
+```
+
+This uses the existing renderer entry (`src/renderer.js`) with a browser-safe preload mock.
+
+### Production web build
+
+Build a static site into `dist/`:
+
+```sh
+npm run build:web
+```
+
+### Deploy to Netlify
+
+Netlify is configured via `netlify.toml` to:
+
+- run `npm run build:web`
+- publish the `dist` folder
+- serve `index.html` for all routes (SPA fallback)
+
+You can connect the repo in Netlify and it should pick these settings up automatically.
+
+### Browser limitations (expected)
+
+When running as a web page, the browser sandbox applies:
+
+- The app cannot access real filesystem paths.
+- Electron-only actions (like “reveal in Finder/Explorer”) are unavailable.
+
+File loading in the web build uses the browser’s file picker (File System Access API when available, otherwise a standard `<input type="file">`).
+
 ## Usage
 
 1. Load your media files into the left and right panes by clicking on the respective "Load File" buttons or dragging them onto the buttons from another window.

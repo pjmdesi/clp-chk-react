@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build:web"
+  publish = "dist"
+
+# SPA fallback (also handled via dist/_redirects)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

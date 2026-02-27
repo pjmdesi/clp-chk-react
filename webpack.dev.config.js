@@ -21,7 +21,7 @@ rules.push(
 		],
 	},
 	{
-		test: /\.(ico|icns|png|jpg|gif|json|xml|ico|svg|mp4|avi|mov|mpeg|mp3|png|jpe?g|webp)$/i,
+		test: /\.(ico|icns|png|jpg|gif|json|xml|svg|mp4|avi|mov|mpeg|mp3|jpe?g|webp|woff2?|ttf|otf|eot)$/i,
 		type: 'asset/resource',
 	}
 );

@@ -10,8 +10,8 @@ rules.push(
 		use: ['style-loader', 'css-loader', 'sass-loader'],
 	},
 	{
-		// all graphics assets
-		test: /\.(ico|icns|png|jpg|gif|json|xml|ico|svg|mp4|avi|mov|mpeg|mp3|png|jpe?g|webp)$/i,
+		// all graphics/media/font assets
+		test: /\.(ico|icns|png|jpg|gif|json|xml|svg|mp4|avi|mov|mpeg|mp3|jpe?g|webp|woff2?|ttf|otf|eot)$/i,
 		use: [
 			{
 				loader: 'file-loader',

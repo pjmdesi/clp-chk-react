@@ -7,6 +7,7 @@
     "scripts": {
         "start": "electron-forge start",
         "dev:web": "webpack serve --config webpack.dev.config.js",
+        "build:web": "webpack --config webpack.web.config.js --mode production",
         "package": "electron-forge package",
         "make": "electron-forge make",
         "publish": "electron-forge publish",
@@ -33,13 +34,17 @@
         "css-loader": "^7.1.2",
         "electron": "^39.2.7",
         "electron-devtools-installer": "^4.0.0",
+        "file-loader": "^6.2.0",
         "node-loader": "^2.0.0",
         "sass": "^1.75.0",
         "sass-loader": "^16.0.6",
         "style-loader": "^4.0.0",
         "video.js": "^8.23.4",
         "webpack": "^5.91.0",
-        "webpack-cli": "^6.0.1"
+        "webpack-cli": "^6.0.1",
+        "@webpack-cli/serve": "^3.0.1",
+        "html-webpack-plugin": "^5.6.0",
+        "webpack-dev-server": "^5.0.4"
     },
     "keywords": [],
     "author": {
