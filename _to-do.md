@@ -62,8 +62,9 @@
 
 ### Features (app)
 
+* Allow user to shift the position of a shorter video in the timeline to sync it up with the longer video (if videos are different lengths and have different start / end points, for instance a clip from a longer video, or if one is missing the intro or outro). This could be done by allowing the user to input a timecode offset for the shorter video, or by allowing them to shift the position of the shorter video in the timeline by dragging it left or right.
 * Need to support GIF files
-  * For now, just treat them as special images (no playback controls, can only be paried with other GIFs)
+  * For now, just treat them as special images (no playback controls, can only be paired with other GIFs)
   * Eventually, add playback controls for GIFs as well and allow them to be compatible with video files
 * Allow for rendering of comparison media to file. _No idea how to do that..._ [Maybe this?](https://dev.to/yonatanbd/using-electron-to-create-videos-canvas-ffmpeg-5gdm)
   * Images should render to jpg or allow user to choose format in settings
