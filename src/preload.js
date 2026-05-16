@@ -1,6 +1,6 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
-const { ipcRenderer, contextBridge } = require('electron');
+const { ipcRenderer, contextBridge, webUtils } = require('electron');
 const { Titlebar, TitlebarColor } = require('custom-electron-titlebar');
 // const path = require('node:path');
 
@@ -20,6 +20,15 @@ contextBridge.exposeInMainWorld('api', {
 	openExternal: url => ipcRenderer.send('open-external', url),
 	pickMediaFile: () => ipcRenderer.invoke('pick-media-file'),
 	pickMediaFiles: () => ipcRenderer.invoke('pick-media-files'),
+	// Electron 32+ replaced File.path with webUtils.getPathForFile(file).
+	// Returns the absolute filesystem path for a File (drag-drop or <input type="file">), or '' if unavailable.
+	getPathForFile: file => {
+		try {
+			return webUtils?.getPathForFile?.(file) || '';
+		} catch {
+			return '';
+		}
+	},
 	resizeWindow: dimensions => {
         console.log(`Setting dimensions to: ${dimensions.width}, ${dimensions.height}`);
         ipcRenderer.send('resize-window', dimensions)

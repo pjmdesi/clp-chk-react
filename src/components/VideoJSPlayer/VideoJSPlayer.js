@@ -2,6 +2,43 @@ import React from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 
+// Map common video extensions to MIME types so video.js can pick the right source handler.
+//
+// We pass these to player.src({src, type}). video.js then asks the HTML5 tech
+// `canPlayType(type)` to decide whether it can handle the source. If that returns ""
+// the source is refused with MEDIA_ERR_SRC_NOT_SUPPORTED — even when Chromium's
+// underlying media stack would happily decode the actual file bytes.
+//
+// Several containers fall into that trap: matroska, avi, and mpeg-program-stream
+// all have MIME types that Chromium's canPlayType returns "" for, even though
+// common codecs inside them (H.264, H.265, AAC) decode fine in practice. For those
+// we map to a *permissive* type Chromium claims to support; the HTML5 tech then
+// loads the file and Chromium sniffs and decodes the real container at the OS layer.
+const VIDEO_MIME_BY_EXT = {
+	mp4: 'video/mp4',
+	m4v: 'video/mp4',
+	mov: 'video/quicktime',
+	webm: 'video/webm',
+	// mkv is matroska; webm is a strict subset of matroska. Chromium accepts
+	// video/webm via canPlayType, and the media stack handles the actual file regardless.
+	mkv: 'video/webm',
+	ogv: 'video/ogg',
+	ogg: 'video/ogg',
+	// mpeg-PS and avi: no canPlayType support in Chromium; fall back to mp4 so the
+	// source is loaded. Whether the file actually plays then depends purely on
+	// whether Chromium can decode the codecs inside.
+	mpeg: 'video/mp4',
+	mpg: 'video/mp4',
+	avi: 'video/mp4',
+};
+
+const guessVideoMimeType = url => {
+	if (typeof url !== 'string' || !url) return 'video/mp4';
+	const match = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i);
+	const ext = match ? match[1].toLowerCase() : '';
+	return VIDEO_MIME_BY_EXT[ext] || 'video/mp4';
+};
+
 function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop, muted, playbackRate, volume, style, videoStyle, videoRef }) {
 	const containerRef = React.useRef(null);
 	const wrapperRef = React.useRef(null);
@@ -120,7 +157,7 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 	React.useEffect(() => {
 		const player = playerRef.current;
 		if (player && src) {
-			player.src({ src, type: 'video/mp4' });
+			player.src({ src, type: guessVideoMimeType(src) });
 		}
 	}, [src]);
 

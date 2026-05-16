@@ -19,6 +19,17 @@ const toFileUrl = filePath => {
 	return null;
 };
 
+// Electron 32+ removed the non-standard File.path property in favor of
+// webUtils.getPathForFile(file). Prefer the preload-exposed helper; fall back
+// to file.path for older Electron versions that still expose it.
+const getElectronFilePath = file => {
+	if (!file) return '';
+	const fromWebUtils = typeof window?.api?.getPathForFile === 'function' ? window.api.getPathForFile(file) : '';
+	if (typeof fromWebUtils === 'string' && fromWebUtils) return fromWebUtils;
+	if (typeof file.path === 'string' && file.path) return file.path;
+	return '';
+};
+
 function MediaFileInput({
 	setMediaFile,
 	setSecondaryMediaFile,
@@ -154,16 +165,17 @@ function MediaFileInput({
 		const file = e.target.files[0];
 		if (!file) return;
 
-		// Electron: read file and convert to blob URL
-		if (isInElectron && file.path) {
+		// Electron: read file and convert to file:// URL so we can persist the real path.
+		const electronPath = isInElectron ? getElectronFilePath(file) : '';
+		if (isInElectron && electronPath) {
 			try {
-				const fileUrl = toFileUrl(file.path);
-				if (!fileUrl) throw new Error('Failed to convert file.path to file:// URL');
+				const fileUrl = toFileUrl(electronPath);
+				if (!fileUrl) throw new Error('Failed to convert filesystem path to file:// URL');
 
 				const mediaType = file.type.startsWith('image/') ? 'image' : 'video';
 				saveFileMetadata(fileUrl, {
 					fileName: file.name,
-					filePath: file.path,
+					filePath: electronPath,
 					mediaType,
 					fileSize: typeof file.size === 'number' ? file.size : null,
 				});
@@ -231,14 +243,15 @@ function MediaFileInput({
 			}
 
 			// Electron: prefer using a file:// URL so we can persist/restore the real filesystem path.
-			if (isInElectron && file.path) {
+			const electronPath = isInElectron ? getElectronFilePath(file) : '';
+			if (isInElectron && electronPath) {
 				try {
-					const fileUrl = toFileUrl(file.path);
-					if (!fileUrl) throw new Error('Failed to convert dropped file.path to file:// URL');
+					const fileUrl = toFileUrl(electronPath);
+					if (!fileUrl) throw new Error('Failed to convert dropped filesystem path to file:// URL');
 					const mediaType = file.type.startsWith('image/') ? 'image' : 'video';
 					saveFileMetadata(fileUrl, {
 						fileName: file.name,
-						filePath: file.path,
+						filePath: electronPath,
 						mediaType: mediaType,
 						fileSize: typeof file.size === 'number' ? file.size : null,
 					});
