@@ -34,6 +34,8 @@ function ControllerBar({
 	mainContainerSize,
 	isInElectron,
 	setCurrentModal,
+	shorterVideoOffset = 0,
+	setShorterVideoOffset = () => {},
 }) {
 	const [hasAnyVideo, setHasAnyVideo] = React.useState(false),
 		[hasBothMedia, setHasBothMedia] = React.useState(!!leftMedia && !!rightMedia),
@@ -42,8 +44,12 @@ function ControllerBar({
 		[shorterVideoDuration, setShorterVideoDuration] = React.useState(0),
 		[longerVideoSide, setLongerVideoSide] = React.useState('Left'),
 		[shorterVideoSide, setShorterVideoSide] = React.useState('Right'),
-		[shorterVideoStartTime, setShorterVideoStartTime] = React.useState(0),
 		[timelineSliderTicks, setTimelineSliderTicks] = React.useState({});
+
+	// Drag of the shorter-video band: track the offset value at the moment the drag
+	// started so we can apply pixel deltas against a stable base rather than the
+	// running offset (which would compound rounding error across many move events).
+	const offsetDragStartRef = React.useRef(0);
 
 	const updateToolSettings = (newSettingVal, setting) => {
 		const newSettings = { ...toolSettings };
@@ -299,29 +305,73 @@ function ControllerBar({
 
 		const newTimelineSliderTicks = {};
 
-		if (leftMediaMetaData?.duration === rightMediaMetaData?.duration) {
+		// Match the same 10ms tolerance the offset band uses so the tick layout
+		// stays consistent with band visibility.
+		const ticksDurationsDiffer =
+			!!leftMediaMetaData?.duration &&
+			!!rightMediaMetaData?.duration &&
+			Math.abs(leftMediaMetaData.duration - rightMediaMetaData.duration) > 0.01;
+
+		if (!ticksDurationsDiffer) {
 			newTimelineSliderTicks['videoStart'] = { value: 0, title: `Video Start (0:00:00.00)` };
 			newTimelineSliderTicks['videoEnd'] = { value: longerVideoDur, title: `Video End (${secondsToTimecode(longerVideoDur, framerate)})` };
 		} else {
+			// Tick marks reflect the OFFSET position of the shorter video within the longer
+			// video's timeline. Dragging the band moves both shorter ticks in unison.
+			const shorterStart = shorterVideoOffset;
+			const shorterEnd = shorterStart + shorterVideoDur;
 			newTimelineSliderTicks['longerVideoStart'] = { value: 0, title: `Video Start (0:00:00.00)` };
 			newTimelineSliderTicks['longerVideoEnd'] = { value: longerVideoDur, title: `Longer Video End (${longerVideoSd}) | ${secondsToTimecode(longerVideoDur, framerate)}` };
-			newTimelineSliderTicks['shorterVideoEnd'] = {
-				value: shorterVideoDur,
-				title: `Shorter Video End (${shorterVideoSd}) | ${secondsToTimecode(shorterVideoDur, framerate)}`,
+			newTimelineSliderTicks['shorterVideoStart'] = {
+				value: shorterStart,
+				title: `Shorter Video Start (${shorterVideoSd}) | ${secondsToTimecode(shorterStart, framerate)}`,
 			};
-
-			if (shorterVideoStartTime > 0) {
-				newTimelineSliderTicks['shorterVideoStart'] = {
-					value: shorterVideoStartTime,
-					title: `Shorter Video Start (${secondsToTimecode(shorterVideoStartTime, framerate)})`,
-				};
-			}
+			newTimelineSliderTicks['shorterVideoEnd'] = {
+				value: shorterEnd,
+				title: `Shorter Video End (${shorterVideoSd}) | ${secondsToTimecode(shorterEnd, framerate)}`,
+			};
 		}
 
 		setTimelineSliderTicks(newTimelineSliderTicks);
 
 		mediaVsContainerSizeCheck();
-	}, [mainContainerSize, leftMediaMetaData, rightMediaMetaData, toolSettings.controllerBarOptions.floating]);
+	}, [mainContainerSize, leftMediaMetaData, rightMediaMetaData, toolSettings.controllerBarOptions.floating, shorterVideoOffset]);
+
+	// Draggable offset band — only when the two clips actually have different durations.
+	// Tolerance (10 ms) keeps floating-point ε in encoded durations from triggering it.
+	// Drag is free by default; hold Shift to snap to the nearest frame.
+	const durationsDiffer =
+		!!leftMediaMetaData?.duration &&
+		!!rightMediaMetaData?.duration &&
+		Math.abs(leftMediaMetaData.duration - rightMediaMetaData.duration) > 0.01;
+	const offsetMax = Math.max(0, longerVideoDuration - shorterVideoDuration);
+
+	const commitOffsetDrag = (delta, opts) => {
+		let next = offsetDragStartRef.current + delta;
+		if (opts?.shiftKey && framerate > 0) {
+			const framePeriod = 1 / framerate;
+			next = Math.round(next / framePeriod) * framePeriod;
+		}
+		next = Math.max(0, Math.min(offsetMax, next));
+		setShorterVideoOffset(next);
+	};
+
+	const offsetBands = durationsDiffer
+		? [
+				{
+					key: 'shorterVideoOffset',
+					from: shorterVideoOffset,
+					to: shorterVideoOffset + shorterVideoDuration,
+					title: "Drag to shift the shorter video's position in the timeline. Hold Shift to snap to frames.",
+					className: 'shorter-video-offset',
+					onDragStart: () => {
+						offsetDragStartRef.current = shorterVideoOffset;
+					},
+					onDragMove: commitOffsetDrag,
+					onDragEnd: commitOffsetDrag,
+				},
+			]
+		: null;
 
 	return (
 		<div id="controllerBar" className={`${toolSettings.controllerBarOptions.floating ? 'floating' : 'docked'}${hasAnyVideo ? ' videos' : ''}`}>
@@ -344,6 +394,7 @@ function ControllerBar({
 					}}
 					snapToTicks={false}
 					ticks={timelineSliderTicks}
+					bands={offsetBands}
 					onChangeComplete={time => {
 						// First turn off scrubbing, then resume if needed
 						setTimeout(() => {

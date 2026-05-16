@@ -334,7 +334,12 @@ function MainContainer() {
 		[currentModal, setCurrentModal] = React.useState(null),
 		[unifiedMediaDimensions, setUnifiedMediaDimensions] = React.useState({ width: 0, height: 0, aspectRatio: 1, framerate: 0 }),
 		[leftMediaMetaData, setLeftMediaMetaData] = React.useState(null),
-		[rightMediaMetaData, setRightMediaMetaData] = React.useState(null);
+		[rightMediaMetaData, setRightMediaMetaData] = React.useState(null),
+		// Seconds offset applied to the shorter video within the longer video's timeline.
+		// 0 = shorter starts at the same point as longer. Always >= 0 (negative offsets
+		// were ruled out — the longer video is treated as the reference timeline).
+		// Resets to 0 whenever either media slot changes.
+		[shorterVideoOffset, setShorterVideoOffset] = React.useState(0);
 
 	// Modal props are snapshotted at open time; use refs so modal content can always read latest settings.
 	const toolSettingsRef = React.useRef(toolSettings);
@@ -957,6 +962,21 @@ function MainContainer() {
 		}
 	}, [leftMedia, rightMedia]);
 
+	// Reset the shorter-video offset whenever the actual *pair* of files changes
+	// (a new file loaded, or one closed). A pure left/right swap is not a new pair
+	// — the user's offset is still meaningful since it describes the relationship
+	// between these two specific files — so swaps keep the offset intact.
+	const prevMediaPairRef = React.useRef({ left: null, right: null });
+	React.useEffect(() => {
+		const prev = prevMediaPairRef.current;
+		const isSwap = !!leftMedia && !!rightMedia && prev.left === rightMedia && prev.right === leftMedia;
+		const isSamePair = prev.left === leftMedia && prev.right === rightMedia;
+		if (!isSwap && !isSamePair) {
+			setShorterVideoOffset(0);
+		}
+		prevMediaPairRef.current = { left: leftMedia, right: rightMedia };
+	}, [leftMedia, rightMedia]);
+
 	React.useEffect(() => {
 		setUserOS(detectUserOS);
 	});
@@ -998,6 +1018,7 @@ function MainContainer() {
 				isInBrowser={isInBrowser}
 				userOS={userOS}
 				setCurrentModal={setCurrentModal}
+				shorterVideoOffset={shorterVideoOffset}
 			/>
 			<ControllerBar
                 defaultAppSettings={defaultAppSettings}
@@ -1024,6 +1045,8 @@ function MainContainer() {
 				rightMediaMetaData={rightMediaMetaData}
 				isInElectron={isInElectron}
 				isInBrowser={isInBrowser}
+				shorterVideoOffset={shorterVideoOffset}
+				setShorterVideoOffset={setShorterVideoOffset}
 			/>
 			<ModalContainer currentModal={currentModal} setCurrentModal={setCurrentModal} />
 		</div>

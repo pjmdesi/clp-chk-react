@@ -10,6 +10,7 @@ function PlayerSlider({
 	value,
 	stepValue = 1,
 	ticks = null,
+	bands = null,
 	snapToTicks = false,
 	snapThreshold = null,
 	inputMode = 'auto',
@@ -246,9 +247,14 @@ function PlayerSlider({
 	};
 
 	const handleTickClick = (tickValue) => {
-		// Tick marks should behave like a direct value set (not a drag):
-		// commit + propagate to the controlled state.
+		// Tick clicks should behave like a complete scrub cycle (start → change → complete),
+		// not just a value set. Without firing onChangeStart, the parent never flips
+		// isScrubbing → true and never pauses for the seek, so during playback the
+		// underlying video elements are never told to move to the new position; the
+		// master's next timeupdate just overwrites playbackPosition back and the slider
+		// handle snaps to where the master actually is.
 		dragMouseButtonRef.current = 0;
+		onChangeStart && onChangeStart();
 		commitValue(tickValue, { resetDragState: true });
 	};
 
@@ -269,6 +275,75 @@ function PlayerSlider({
 		if (!Number.isFinite(range) || range === 0) return 0;
 		const pct = ((tickValue - min) / range) * 100;
 		return Math.min(100, Math.max(0, pct));
+	};
+
+	// Bands: draggable spans rendered over the slider's track range. Used for things
+	// like the shorter-video offset adjustment, where the user grabs a translucent bar
+	// representing a sub-range of the slider and drags it sideways to move the range.
+	const normalizedBands = React.useMemo(() => {
+		if (!bands) return [];
+		const raw = Array.isArray(bands) ? bands : Object.values(bands);
+		return raw
+			.filter(b => b && typeof b === 'object')
+			.map((b, idx) => ({
+				key: b.key != null ? String(b.key) : `band-${idx}`,
+				from: Number.parseFloat(b.from),
+				to: Number.parseFloat(b.to),
+				onDragStart: typeof b.onDragStart === 'function' ? b.onDragStart : null,
+				onDragMove: typeof b.onDragMove === 'function' ? b.onDragMove : null,
+				onDragEnd: typeof b.onDragEnd === 'function' ? b.onDragEnd : null,
+				title: typeof b.title === 'string' ? b.title : '',
+				className: typeof b.className === 'string' ? b.className : '',
+			}))
+			.filter(b => Number.isFinite(b.from) && Number.isFinite(b.to));
+	}, [bands]);
+
+	const bandsContainerRef = React.useRef(null);
+
+	const beginBandDrag = band => e => {
+		if (e.button !== 0) return;
+		if (!band.onDragMove && !band.onDragEnd) return;
+		e.preventDefault();
+		e.stopPropagation();
+
+		const container = bandsContainerRef.current;
+		if (!container) return;
+		const trackLength = isVertical ? container.offsetHeight : container.offsetWidth;
+		if (trackLength <= 0) return;
+		const range = sliderMinMax[1] - sliderMinMax[0];
+		if (!Number.isFinite(range) || range <= 0) return;
+
+		const startClient = isVertical ? e.clientY : e.clientX;
+		const target = e.currentTarget;
+		try { target.setPointerCapture?.(e.pointerId); } catch {}
+		target.classList.add('dragging');
+
+		band.onDragStart?.({ shiftKey: !!e.shiftKey });
+
+		const computeDelta = ev => {
+			const cur = isVertical ? ev.clientY : ev.clientX;
+			const dPx = cur - startClient;
+			const dVal = (dPx / trackLength) * range;
+			// Vertical sliders run bottom→top, so invert.
+			return isVertical ? -dVal : dVal;
+		};
+
+		const handleMove = ev => {
+			band.onDragMove?.(computeDelta(ev), { shiftKey: !!ev.shiftKey });
+		};
+
+		const handleUp = ev => {
+			try { target.releasePointerCapture?.(e.pointerId); } catch {}
+			target.classList.remove('dragging');
+			target.removeEventListener('pointermove', handleMove);
+			target.removeEventListener('pointerup', handleUp);
+			target.removeEventListener('pointercancel', handleUp);
+			band.onDragEnd?.(computeDelta(ev), { shiftKey: !!ev.shiftKey });
+		};
+
+		target.addEventListener('pointermove', handleMove);
+		target.addEventListener('pointerup', handleUp);
+		target.addEventListener('pointercancel', handleUp);
 	};
 
 	const commitInputText = React.useCallback(() => {
@@ -339,6 +414,34 @@ function PlayerSlider({
 					onChangeComplete={v => handleChangeComplete(v)}
 					vertical={isVertical}
 				/>
+				{/* Bands render first so the tick markers below paint on top, keeping
+				    the in/out indicators visible across the band. */}
+				{!!normalizedBands.length && (
+					<div
+						ref={bandsContainerRef}
+						className={['player-slider-bands', isVertical ? 'is-vertical' : 'is-horizontal'].join(' ')}
+					>
+						{normalizedBands.map(band => {
+							const fromPct = getTickPercent(band.from);
+							const toPct = getTickPercent(band.to);
+							const lo = Math.min(fromPct, toPct);
+							const len = Math.abs(toPct - fromPct);
+							const style = isVertical
+								? { bottom: `${lo}%`, height: `${len}%` }
+								: { left: `${lo}%`, width: `${len}%` };
+							return (
+								<div
+									key={band.key}
+									className={['player-slider-band', band.className].filter(Boolean).join(' ')}
+									title={band.title}
+									style={style}
+									onPointerDown={beginBandDrag(band)}
+									onContextMenu={preventContextMenu}
+								/>
+							);
+						})}
+					</div>
+				)}
 				{!!normalizedTicks.length && (
 					<div className={['player-slider-ticks', isVertical ? 'is-vertical' : 'is-horizontal'].join(' ')}>
 						{normalizedTicks.map((tick) => {

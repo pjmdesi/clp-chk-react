@@ -40,6 +40,7 @@ function MediaContainer({
 	isInElectron,
 	isInBrowser,
 	setCurrentModal,
+	shorterVideoOffset = 0,
 }) {
 	const mediaContainerElem = React.useRef(),
 		leftMediaElem = React.useRef(),
@@ -53,6 +54,33 @@ function MediaContainer({
 	// Keep current tool settings available to async callbacks (intervals/listeners).
 	const toolSettingsRef = React.useRef(toolSettings);
 	toolSettingsRef.current = toolSettings;
+
+	// Keep current metadata available to play/seek effects + sync loop without making
+	// those effects re-run every time framerate / dimensions / etc. update — re-firing
+	// the playing branch mid-playback re-seeks both videos and causes visible stutter.
+	const leftMetaRef = React.useRef(null);
+	leftMetaRef.current = leftMediaMetaData;
+	const rightMetaRef = React.useRef(null);
+	rightMetaRef.current = rightMediaMetaData;
+
+	// Shorter video offset, kept in a ref so the sync loop reads fresh values without
+	// re-running the whole effect when the user is dragging the offset band.
+	const shorterVideoOffsetRef = React.useRef(0);
+	shorterVideoOffsetRef.current = shorterVideoOffset;
+
+	// Maps a master-timeline time T to where the slave should sit, given its duration
+	// and the current offset. State is 'before' (slave hasn't started yet — freeze on
+	// frame 0), 'active' (slave is playing within its range), or 'after' (slave has
+	// ended — freeze on last frame). 'invalid' means we couldn't compute (missing dur).
+	const getSlaveTarget = React.useCallback((masterTime, slaveDuration, offset) => {
+		if (typeof slaveDuration !== 'number' || !Number.isFinite(slaveDuration) || slaveDuration <= 0) {
+			return { time: masterTime, state: 'invalid' };
+		}
+		const t = masterTime - (typeof offset === 'number' && Number.isFinite(offset) ? offset : 0);
+		if (t < 0) return { time: 0, state: 'before' };
+		if (t >= slaveDuration) return { time: slaveDuration, state: 'after' };
+		return { time: t, state: 'active' };
+	}, []);
 
 	// Keep the latest clipMedia function for autoscan interval callbacks.
 	const clipMediaRef = React.useRef(null);
@@ -159,7 +187,6 @@ function MediaContainer({
 	const pausedByBufferingRef = React.useRef(false);
 	const resumeAfterBufferingRef = React.useRef(false);
 	const bufferingDebounceTimeoutRef = React.useRef(null);
-	const syncIntervalRef = React.useRef(null);
 	const lastPlaybackEmitAtRef = React.useRef(0);
 	const prevMasterTimeRef = React.useRef({ left: null, right: null });
 	const slaveFrozenRef = React.useRef(false);
@@ -331,103 +358,252 @@ function MediaContainer({
 		};
 	}, [leftMedia, rightMedia, leftMediaType, rightMediaType]);
 
-	// Keep the longer video as the "master" (plays normally). The shorter is the "slave".
-	// We gently adjust slave playbackRate to catch up when behind.
+	// Frame-locked drift correction.
+	//
+	// The previous implementation polled at 250ms. At 30fps that's only 4 corrections
+	// per second, which lets a few frames of drift accumulate before the loop notices.
+	// Instead we drive correction off requestVideoFrameCallback on the master's real
+	// <video> element, so we re-check sync exactly when a master frame is presented
+	// (typically 30–60 Hz). We read master mediaTime directly from the rVFC metadata,
+	// which is the precise time of the frame being painted — not the wall-clock-ish
+	// currentTime that timeupdate gives.
 	React.useEffect(() => {
 		const shouldRun =
-			leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video' && playbackStatus.playbackState === 'playing' && !playbackStatus.isScrubbing;
+			leftMedia &&
+			rightMedia &&
+			leftMediaType === 'video' &&
+			rightMediaType === 'video' &&
+			playbackStatus.playbackState === 'playing' &&
+			!playbackStatus.isScrubbing;
 
-		if (!shouldRun) {
-			if (syncIntervalRef.current) {
-				clearInterval(syncIntervalRef.current);
-				syncIntervalRef.current = null;
-			}
-			return;
-		}
+		if (!shouldRun) return;
 
 		const masterIsLeft = masterSideRef.current === 'left';
-		const master = masterIsLeft ? leftMediaElem.current : rightMediaElem.current;
-		const slave = masterIsLeft ? rightMediaElem.current : leftMediaElem.current;
-		if (!master || !slave) return;
-		const slaveMeta = masterIsLeft ? rightMediaMetaData : leftMediaMetaData;
+		const masterApi = masterIsLeft ? leftMediaElem.current : rightMediaElem.current;
+		const slaveApi = masterIsLeft ? rightMediaElem.current : leftMediaElem.current;
+		if (!masterApi || !slaveApi) return;
 
-		const BASE_RATE = typeof toolSettings.playerSpeed === 'number' ? toolSettings.playerSpeed : 1;
-		const INTERVAL_MS = 250;
-		const EPS_SEC = 0.01;
-		const KP = 0.6;
-		const MAX_RATE_FRAC = 0.08; // +/- 8%
-		const HARD_SEEK_THRESHOLD_SEC = 0.35;
+		const masterVideoEl = typeof masterApi.getMediaElement === 'function' ? masterApi.getMediaElement() : null;
+		const hasRVFC = !!(masterVideoEl && typeof masterVideoEl.requestVideoFrameCallback === 'function');
+
+		// Sync strategy: ALWAYS SLOW THE LEADER, never push the laggard.
+		//
+		// The classic master/slave-with-rate-boost approach breaks down when a
+		// decoder can't quite manage 1× (which is exactly when sync matters most):
+		// pushing the slave to 1.10× makes its already-overloaded decoder drop more
+		// frames, and it stays behind regardless. Holding the leader back to the
+		// laggard's pace converges to frame-locked sync at the cost of dipping a few
+		// percent under real-time during the worst stretches — a much better trade
+		// for a side-by-side comparison tool.
+		//
+		// Tier thresholds (seconds):
+		//   - SUB_FRAME_EPS: ~half a 60fps frame. Below this is visually
+		//     imperceptible and within rVFC jitter; restore both rates to base.
+		//   - HARD_SEEK_THRESHOLD: drift so large that slowing the leader would take
+		//     too long; snap the leader BACKWARD to the laggard (never skip frames
+		//     forward — that defeats the whole point of frame-perfect compare).
+		//   - In between: proportional slow-down on whichever side is ahead.
+		const SUB_FRAME_EPS = 0.008;
+		const HARD_SEEK_THRESHOLD = 0.30;
+		const KP = 0.8;
+		const MAX_SLOWDOWN_FRAC = 0.20; // Up to 20% slowdown on the leader (≥ 0.80×).
+		// Skip rate corrections for the first N master frames. During decoder warmup
+		// per-frame timing is noisy and a correction can compound the noise. Hard-snaps
+		// still happen if drift is enormous.
+		const STARTUP_GRACE_FRAMES = 30;
+		// After applying a correction, wait this many frames before checking again.
+		// Lets the rate change or seek take effect before stacking another correction.
+		const RATE_COOLDOWN_FRAMES = 4;
+		const SNAP_COOLDOWN_FRAMES = 10;
 		const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
-		syncIntervalRef.current = setInterval(() => {
+		const setRateIfNeeded = (api, rate) => {
+			try {
+				const cur = api.playbackRate;
+				if (typeof cur === 'number' && Math.abs(cur - rate) <= 0.001) return;
+				api.playbackRate = rate;
+			} catch {}
+		};
+
+		let cancelled = false;
+		let pendingId = null;
+		let frameCount = 0;
+		let cooldown = 0;
+
+		const getBaseRate = () => {
+			const speed = toolSettingsRef.current?.playerSpeed;
+			return typeof speed === 'number' && Number.isFinite(speed) && speed > 0 ? speed : 1;
+		};
+
+		const onFrame = (_now, metadata) => {
+			if (cancelled) return;
 			const status = playbackStatusRef.current;
 			if (!status || status.playbackState !== 'playing' || status.isScrubbing) return;
-			if (leftIsWaitingRef.current || rightIsWaitingRef.current) return;
-			if (pausedByBufferingRef.current) return;
-
-			// If the master is past the slave duration, keep slave on its last frame.
-			const slaveDur = slaveMeta?.duration ?? slave.duration;
-			const masterTimeNow = master.currentTime;
-			const slaveFr = slaveMeta?.framerate ?? 30;
-			if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 && masterTimeNow >= slaveDur - 0.02) {
-				try {
-					slave.playbackRate = BASE_RATE;
-					freezeVideoAtEnd(slave, slaveDur, slaveFr);
-				} catch {}
+			if (leftIsWaitingRef.current || rightIsWaitingRef.current || pausedByBufferingRef.current) {
+				schedule();
 				return;
 			}
 
-			// If we were previously frozen (shorter video ended) and master looped/seeked back,
-			// re-align the slave and resume it so it doesn't stay paused/choppy.
+			// Skip while either side is mid-seek. The decoder is already busy moving to
+			// a new position; any read we do is stale, and any correction we apply
+			// interrupts the in-progress seek and tends to make the unclipped player
+			// visibly chop.
+			try {
+				const masterSeeking = typeof masterApi.seeking === 'function' && masterApi.seeking();
+				const slaveSeeking = typeof slaveApi.seeking === 'function' && slaveApi.seeking();
+				if (masterSeeking || slaveSeeking) {
+					schedule();
+					return;
+				}
+			} catch {}
+
+			// Cooldown after a correction — let the rate change or seek take effect
+			// before stacking another correction on top.
+			if (cooldown > 0) {
+				cooldown--;
+				schedule();
+				return;
+			}
+
+			const masterTime = typeof metadata?.mediaTime === 'number' && Number.isFinite(metadata.mediaTime)
+				? metadata.mediaTime
+				: masterApi.currentTime;
+
+			const slaveMeta = masterSideRef.current === 'left' ? rightMetaRef.current : leftMetaRef.current;
+			const slaveDur = slaveMeta?.duration ?? slaveApi.duration;
+			const slaveFr = slaveMeta?.framerate ?? 30;
+			const offset = shorterVideoOffsetRef.current || 0;
+			const baseRate = getBaseRate();
+
+			// Map master time into slave's offset-shifted window.
+			// state === 'after'  : master is past the slave's end → freeze slave on last frame.
+			// state === 'before' : master hasn't reached the slave's start yet → freeze on frame 0.
+			// state === 'active' : slave is playing within its window; run drift correction.
+			const slaveInfo = getSlaveTarget(masterTime, slaveDur, offset);
+
+			if (slaveInfo.state === 'after') {
+				try {
+					slaveApi.playbackRate = baseRate;
+					freezeVideoAtEnd(slaveApi, slaveDur, slaveFr);
+				} catch {}
+				schedule();
+				return;
+			}
+
+			if (slaveInfo.state === 'before') {
+				// Hold slave on its first frame; the slaveFrozenRef so the resume logic
+				// below picks it up when the master enters the slave's window.
+				try {
+					slaveApi.playbackRate = baseRate;
+					if (Math.abs(slaveApi.currentTime - 0) > 0.005) slaveApi.currentTime = 0;
+					if (typeof slaveApi.paused === 'function' && !slaveApi.paused()) safePause(slaveApi);
+					slaveFrozenRef.current = true;
+				} catch {}
+				schedule();
+				return;
+			}
+
+			// state === 'active' from here on.
+
+			// Was previously frozen (slave outside its window) and the master is now
+			// inside the slave window — resume slave at the right time.
 			if (slaveFrozenRef.current) {
 				try {
 					slaveFrozenRef.current = false;
-					if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0) {
-						slave.currentTime = Math.min(masterTimeNow, slaveDur);
-					} else {
-						slave.currentTime = masterTimeNow;
-					}
-					slave.playbackRate = BASE_RATE;
-					safePlay(slave);
+					slaveApi.currentTime = slaveInfo.time;
+					slaveApi.playbackRate = baseRate;
+					safePlay(slaveApi);
 				} catch {}
-			}
-
-			const masterTime = master.currentTime;
-			const slaveTime = slave.currentTime;
-			const delta = slaveTime - masterTime;
-			if (!Number.isFinite(delta)) return;
-
-			// Big drift: snap (rare).
-			if (Math.abs(delta) >= HARD_SEEK_THRESHOLD_SEC) {
-				try {
-					slave.currentTime = masterTime;
-					slave.playbackRate = BASE_RATE;
-				} catch {}
+				schedule();
 				return;
 			}
 
-			// Small drift: subtle playbackRate correction.
-			if (Math.abs(delta) >= EPS_SEC) {
-				// If slave is behind (delta < 0), speed up.
-				const adj = clamp(-KP * delta, -MAX_RATE_FRAC, MAX_RATE_FRAC);
-				try {
-					slave.playbackRate = BASE_RATE * (1 + adj);
-				} catch {}
-			} else {
-				try {
-					slave.playbackRate = BASE_RATE;
-				} catch {}
+			const slaveTime = slaveApi.currentTime;
+			// Compare slave to its OFFSET-SHIFTED target, not to raw master time —
+			// otherwise we'd think the slave is permanently behind by `offset` seconds.
+			const delta = slaveTime - slaveInfo.time;
+			if (!Number.isFinite(delta)) {
+				schedule();
+				return;
 			}
-		}, INTERVAL_MS);
+
+			const absDelta = Math.abs(delta);
+			frameCount++;
+			const inStartupGrace = frameCount < STARTUP_GRACE_FRAMES;
+
+			if (absDelta < SUB_FRAME_EPS) {
+				// Within noise floor — both at base rate.
+				setRateIfNeeded(masterApi, baseRate);
+				setRateIfNeeded(slaveApi, baseRate);
+			} else if (absDelta >= HARD_SEEK_THRESHOLD) {
+				// Drift too large for slowdown to recover quickly. Snap the LEADER
+				// backward to the laggard's time so the slower decoder doesn't have
+				// to skip frames forward.
+				// Offsets: slave's target is slaveInfo.time (== masterTime - offset);
+				// the equivalent master time for a given slaveTime is slaveTime + offset.
+				try {
+					if (delta > 0) {
+						// Slave is ahead of its target — snap slave back to target.
+						slaveApi.currentTime = slaveInfo.time;
+					} else {
+						// Master is ahead of slave's position — snap master back to
+						// the master-timeline position that corresponds to slaveTime.
+						masterApi.currentTime = slaveTime + offset;
+					}
+				} catch {}
+				setRateIfNeeded(masterApi, baseRate);
+				setRateIfNeeded(slaveApi, baseRate);
+				cooldown = SNAP_COOLDOWN_FRAMES;
+			} else if (!inStartupGrace) {
+				// Slow the leader. Laggard always at base rate (we don't push a
+				// decoder past what it can handle).
+				const slowdown = clamp(KP * absDelta, 0, MAX_SLOWDOWN_FRAC);
+				const leaderRate = baseRate * (1 - slowdown);
+				if (delta > 0) {
+					// Slave ahead.
+					setRateIfNeeded(slaveApi, leaderRate);
+					setRateIfNeeded(masterApi, baseRate);
+				} else {
+					// Master ahead.
+					setRateIfNeeded(masterApi, leaderRate);
+					setRateIfNeeded(slaveApi, baseRate);
+				}
+				cooldown = RATE_COOLDOWN_FRAMES;
+			} else {
+				// Startup grace — both at base rate while decoder stabilizes.
+				setRateIfNeeded(masterApi, baseRate);
+				setRateIfNeeded(slaveApi, baseRate);
+			}
+
+			schedule();
+		};
+
+		const schedule = () => {
+			if (cancelled) return;
+			if (hasRVFC) {
+				try { pendingId = masterVideoEl.requestVideoFrameCallback(onFrame); } catch {}
+			} else {
+				// Fallback for browsers without rVFC: use rAF + currentTime sampling.
+				pendingId = window.requestAnimationFrame(() => onFrame(0, { mediaTime: masterApi.currentTime }));
+			}
+		};
+
+		schedule();
 
 		return () => {
-			if (syncIntervalRef.current) {
-				clearInterval(syncIntervalRef.current);
-				syncIntervalRef.current = null;
+			cancelled = true;
+			if (pendingId != null) {
+				if (hasRVFC && typeof masterVideoEl?.cancelVideoFrameCallback === 'function') {
+					try { masterVideoEl.cancelVideoFrameCallback(pendingId); } catch {}
+				} else {
+					try { window.cancelAnimationFrame(pendingId); } catch {}
+				}
+				pendingId = null;
 			}
-			try {
-				slave.playbackRate = BASE_RATE;
-			} catch {}
+			// Restore both rates — either side may have been slowed.
+			const restoreRate = getBaseRate();
+			try { masterApi.playbackRate = restoreRate; } catch {}
+			try { slaveApi.playbackRate = restoreRate; } catch {}
 		};
 	}, [
 		playbackStatus.playbackState,
@@ -436,63 +612,178 @@ function MediaContainer({
 		rightMedia,
 		leftMediaType,
 		rightMediaType,
-		toolSettings.playerSpeed,
-		leftMediaMetaData,
-		rightMediaMetaData,
-		safePause,
+		masterSide,
+		safePlay,
+		freezeVideoAtEnd,
 	]);
 
 	// Play/pause the videos when playback state changes.
+	// Note: metadata + playerSpeed are read from refs so this effect doesn't re-fire
+	// when framerate detection or other metadata updates land — re-firing the playing
+	// branch mid-playback would re-seek both videos and cause visible stutter.
+	//
+	// On transition to 'playing' we seek both videos and then wait for both decoders
+	// to reach HAVE_FUTURE_DATA (or fire 'canplay') before calling play(). Starting
+	// both before each decoder is primed at the target frame is what causes the
+	// stuttery / wrong-speed first second of playback: one side renders smoothly
+	// while the other catches up by dropping frames.
 	React.useEffect(() => {
-		if (leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video') {
-			if (playbackStatus.playbackState === 'playing') {
-				// On transition to playing, align once to the shared playback position.
-				const leftDuration = leftMediaMetaData?.duration || leftMediaElem.current.duration;
-				const rightDuration = rightMediaMetaData?.duration || rightMediaElem.current.duration;
-				const target = playbackStatusRef.current?.playbackPosition ?? playbackStatus.playbackPosition;
-				const clampedLeft = Math.min(target, leftDuration);
-				const clampedRight = Math.min(target, rightDuration);
-				leftMediaElem.current.currentTime = clampedLeft;
-				rightMediaElem.current.currentTime = clampedRight;
-				leftMediaElem.current.playbackRate = toolSettings.playerSpeed;
-				rightMediaElem.current.playbackRate = toolSettings.playerSpeed;
-				const masterElem = masterSideRef.current === 'left' ? leftMediaElem.current : rightMediaElem.current;
-				const slaveElem = masterSideRef.current === 'left' ? rightMediaElem.current : leftMediaElem.current;
-				const slaveDur = masterSideRef.current === 'left' ? rightDuration : leftDuration;
-				const slaveT = masterSideRef.current === 'left' ? clampedRight : clampedLeft;
-				safePlay(masterElem);
-				// If the slave video is already at its end (shorter duration), keep it on the last frame.
-				if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 && slaveT >= slaveDur - 0.02) {
-					try {
-						const slaveFr = (masterSideRef.current === 'left' ? rightMediaMetaData?.framerate : leftMediaMetaData?.framerate) ?? 30;
-						slaveElem.currentTime = getFreezeTime(slaveDur, slaveFr);
-					} catch {}
+		if (!(leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video')) return;
+
+		const leftMeta = leftMetaRef.current;
+		const rightMeta = rightMetaRef.current;
+		const speed = typeof toolSettingsRef.current?.playerSpeed === 'number' ? toolSettingsRef.current.playerSpeed : 1;
+
+		if (playbackStatus.playbackState === 'playing') {
+			const leftEl = leftMediaElem.current;
+			const rightEl = rightMediaElem.current;
+			if (!leftEl || !rightEl) return;
+
+			const leftDuration = leftMeta?.duration || leftEl.duration;
+			const rightDuration = rightMeta?.duration || rightEl.duration;
+			const masterIsLeft = masterSideRef.current === 'left';
+			const masterElem = masterIsLeft ? leftEl : rightEl;
+			const slaveElem = masterIsLeft ? rightEl : leftEl;
+			const masterDuration = masterIsLeft ? leftDuration : rightDuration;
+			const slaveDuration = masterIsLeft ? rightDuration : leftDuration;
+			const slaveFr = (masterIsLeft ? rightMeta?.framerate : leftMeta?.framerate) ?? 30;
+			const offset = shorterVideoOffsetRef.current || 0;
+
+			const rawTarget = playbackStatusRef.current?.playbackPosition ?? playbackStatus.playbackPosition;
+			const masterTarget = Math.min(rawTarget, masterDuration);
+			const slaveTargetInfo = getSlaveTarget(masterTarget, slaveDuration, offset);
+			// When state is 'after' we still want the visible frame, not the exact
+			// duration value (which can wrap to frame 0 on some players).
+			const slaveSeekTime = slaveTargetInfo.state === 'after'
+				? getFreezeTime(slaveDuration, slaveFr)
+				: slaveTargetInfo.time;
+			const slaveOutOfRange = slaveTargetInfo.state !== 'active';
+
+			// Only seek if the player isn't already at the target — needless seeks
+			// reset the decoder pipeline and add latency to the play() call.
+			const SEEK_EPS = 0.001;
+			if (Math.abs(masterElem.currentTime - masterTarget) > SEEK_EPS) masterElem.currentTime = masterTarget;
+			if (Math.abs(slaveElem.currentTime - slaveSeekTime) > SEEK_EPS) slaveElem.currentTime = slaveSeekTime;
+			masterElem.playbackRate = speed;
+			slaveElem.playbackRate = speed;
+
+			let cancelled = false;
+			const READY_TO_PLAY = 3; // HAVE_FUTURE_DATA
+			const READINESS_TIMEOUT_MS = 1500;
+
+			const waitForReady = api =>
+				new Promise(resolve => {
+					if (!api) {
+						resolve();
+						return;
+					}
+					const readState = () => {
+						try {
+							return typeof api.readyState === 'function' ? api.readyState() : 0;
+						} catch {
+							return 0;
+						}
+					};
+					if (readState() >= READY_TO_PLAY) {
+						resolve();
+						return;
+					}
+					let timeoutId = null;
+					const cleanup = () => {
+						try { api.off?.('canplay', onReady); } catch {}
+						try { api.off?.('canplaythrough', onReady); } catch {}
+						if (timeoutId != null) clearTimeout(timeoutId);
+					};
+					const onReady = () => {
+						cleanup();
+						resolve();
+					};
+					try { api.on?.('canplay', onReady); } catch {}
+					try { api.on?.('canplaythrough', onReady); } catch {}
+					timeoutId = setTimeout(() => {
+						cleanup();
+						resolve();
+					}, READINESS_TIMEOUT_MS);
+				});
+
+			const masterReady = waitForReady(masterElem);
+			// If slave is frozen (before or after its window) we don't need it to be
+			// ready to play — it just sits paused on the correct edge frame.
+			const slaveReady = slaveOutOfRange ? Promise.resolve() : waitForReady(slaveElem);
+
+			Promise.all([masterReady, slaveReady]).then(() => {
+				if (cancelled) return;
+				const status = playbackStatusRef.current;
+				// User might have hit pause / scrubbed while we were waiting.
+				if (!status || status.playbackState !== 'playing' || status.isScrubbing) return;
+
+				if (slaveOutOfRange) {
+					safePlay(masterElem);
 					safePause(slaveElem);
 				} else {
+					// Kick off both plays in the same microtask so wall-clock start times
+					// are as close as the browser will allow.
+					safePlay(masterElem);
 					safePlay(slaveElem);
 				}
-			}
+			});
 
-			if (playbackStatus.playbackState === 'paused') {
-				leftMediaElem.current.playbackRate = toolSettings.playerSpeed;
-				rightMediaElem.current.playbackRate = toolSettings.playerSpeed;
-				if (leftMediaType === 'video') safePause(leftMediaElem.current);
-				if (rightMediaType === 'video') safePause(rightMediaElem.current);
-			}
+			return () => {
+				cancelled = true;
+			};
+		}
+
+		if (playbackStatus.playbackState === 'paused') {
+			leftMediaElem.current.playbackRate = speed;
+			rightMediaElem.current.playbackRate = speed;
+			if (leftMediaType === 'video') safePause(leftMediaElem.current);
+			if (rightMediaType === 'video') safePause(rightMediaElem.current);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [playbackStatus.playbackState, leftMedia, rightMedia, leftMediaType, rightMediaType, leftMediaMetaData, rightMediaMetaData, toolSettings.playerSpeed, safePlay, safePause]);
+	}, [playbackStatus.playbackState, leftMedia, rightMedia, leftMediaType, rightMediaType, safePlay, safePause, getFreezeTime]);
 
-	// Apply seeks only while scrubbing or paused (never during normal playing ticks).
+	// Apply seeks while scrubbing or paused (never during normal playing ticks).
+	// rAF-coalesced: a rapid scrub fires this effect many times per second, but we
+	// only ever write currentTime once per animation frame with the latest target.
+	// Without this, every scrub tick queues a separate seek operation, which backs
+	// up the decoder pipeline and produces choppy playback once playback resumes.
+	//
+	// Slave (shorter video) time is `masterTime - offset`, clamped to [0, slaveDuration].
+	// Outside that window, slave sits frozen on its first or last frame.
+	// We include shorterVideoOffset in deps so dragging the offset band re-seeks the
+	// slave to the new effective position immediately.
 	React.useEffect(() => {
 		if (!(leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video')) return;
 		if (!(playbackStatus.isScrubbing || playbackStatus.playbackState === 'paused')) return;
 
-		const leftDuration = leftMediaMetaData?.duration || leftMediaElem.current.duration;
-		const rightDuration = rightMediaMetaData?.duration || rightMediaElem.current.duration;
 		const target = playbackStatus.playbackPosition;
-		leftMediaElem.current.currentTime = Math.min(target, leftDuration);
-		rightMediaElem.current.currentTime = Math.min(target, rightDuration);
+		const raf = requestAnimationFrame(() => {
+			const leftEl = leftMediaElem.current;
+			const rightEl = rightMediaElem.current;
+			if (!leftEl || !rightEl) return;
+			const leftMeta = leftMetaRef.current;
+			const rightMeta = rightMetaRef.current;
+			const leftDuration = leftMeta?.duration || leftEl.duration;
+			const rightDuration = rightMeta?.duration || rightEl.duration;
+			const masterIsLeft = masterSideRef.current === 'left';
+			const masterDuration = masterIsLeft ? leftDuration : rightDuration;
+			const slaveDuration = masterIsLeft ? rightDuration : leftDuration;
+			const slaveFr = (masterIsLeft ? rightMeta?.framerate : leftMeta?.framerate) ?? 30;
+			const offset = shorterVideoOffsetRef.current || 0;
+
+			const masterTime = Math.min(target, masterDuration);
+			const slaveInfo = getSlaveTarget(masterTime, slaveDuration, offset);
+			const slaveSeekTime = slaveInfo.state === 'after'
+				? getFreezeTime(slaveDuration, slaveFr)
+				: slaveInfo.time;
+
+			const masterEl = masterIsLeft ? leftEl : rightEl;
+			const slaveEl = masterIsLeft ? rightEl : leftEl;
+			masterEl.currentTime = masterTime;
+			slaveEl.currentTime = slaveSeekTime;
+		});
+
+		return () => cancelAnimationFrame(raf);
 	}, [
 		playbackStatus.playbackPosition,
 		playbackStatus.isScrubbing,
@@ -501,8 +792,9 @@ function MediaContainer({
 		rightMedia,
 		leftMediaType,
 		rightMediaType,
-		leftMediaMetaData,
-		rightMediaMetaData,
+		shorterVideoOffset,
+		getSlaveTarget,
+		getFreezeTime,
 	]);
 
 	// Switches between auto and manual mode for the divider tool
@@ -794,50 +1086,94 @@ function MediaContainer({
 		};
 	};
 
-	// Framerate detection using requestVideoFrameCallback
+	// Framerate detection using requestVideoFrameCallback.
+	// `videoElement` must be the underlying <video> element (not a video.js wrapper).
+	//
+	// Each rVFC call gives us the source-time of a frame submitted to the compositor.
+	// Between consecutive calls, mediaTimeDiff is at minimum 1/fps (one source frame)
+	// and increases when the decoder drops frames (mediaTime jumps by multiple frames
+	// while presentedFrames advances by 1). So the minimum sample is always the most
+	// accurate estimate of the true frame period. We use the 10th percentile instead
+	// of the absolute min for noise resistance, and reject implausibly low / high
+	// values so a stretch of dropped frames during decoder warmup can't land a bogus
+	// "8 fps" in the metadata.
 	const detectFramerate = (videoElement, framerateDataRef, isLeft) => {
+		if (!videoElement || typeof videoElement.requestVideoFrameCallback !== 'function') return;
+
+		// Cancel any in-flight detection from a previous source.
+		const prev = framerateDataRef.current?.callbackId;
+		if (prev != null && typeof videoElement.cancelVideoFrameCallback === 'function') {
+			try { videoElement.cancelVideoFrameCallback(prev); } catch {}
+		}
+
+		const MIN_SAMPLES = 30;
+		const MAX_SAMPLES = 120;
+		const MIN_PLAUSIBLE_FPS = 12;
+		const MAX_PLAUSIBLE_FPS = 240;
+		const PERCENTILE = 0.1;
+
+		framerateDataRef.current = {
+			samples: [],
+			lastMediaTime: 0,
+			lastFrameNum: 0,
+			callbackId: null,
+			lastReportedFps: null,
+		};
+
+		const computeFps = samples => {
+			if (samples.length < MIN_SAMPLES) return null;
+			const sorted = samples.slice().sort((a, b) => a - b);
+			const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * PERCENTILE));
+			const period = sorted[idx];
+			if (!Number.isFinite(period) || period <= 0) return null;
+			const fps = Math.round(1 / period);
+			if (fps < MIN_PLAUSIBLE_FPS || fps > MAX_PLAUSIBLE_FPS) return null;
+			return fps;
+		};
+
+		const reportFps = fps => {
+			const data = framerateDataRef.current;
+			if (!data || data.lastReportedFps === fps) return;
+			data.lastReportedFps = fps;
+			if (isLeft) {
+				setLeftMediaMetaData(prev => (prev && prev.framerate === fps ? prev : { ...prev, framerate: fps }));
+			} else {
+				setRightMediaMetaData(prev => (prev && prev.framerate === fps ? prev : { ...prev, framerate: fps }));
+			}
+		};
+
 		const ticker = (now, metadata) => {
 			const data = framerateDataRef.current;
-			const mediaTimeDiff = Math.abs(metadata.mediaTime - data.lastMediaTime);
-			const frameNumDiff = Math.abs(metadata.presentedFrames - data.lastFrameNum);
-			const diff = mediaTimeDiff / frameNumDiff;
+			if (!data) return;
 
-			// Collect samples when video is playing at normal speed
-			if (diff && diff < 1 && data.samples.length < 50 && videoElement.playbackRate === 1) {
-				data.samples.push(diff);
+			const mediaTime = typeof metadata?.mediaTime === 'number' ? metadata.mediaTime : 0;
+			const frameNum = typeof metadata?.presentedFrames === 'number' ? metadata.presentedFrames : 0;
+			const mediaTimeDiff = mediaTime - data.lastMediaTime;
+			const frameNumDiff = frameNum - data.lastFrameNum;
 
-				// Once we have enough samples, calculate FPS and update metadata
-				if (data.samples.length >= 30) {
-					const avgDiff = data.samples.reduce((a, b) => a + b) / data.samples.length;
-					const fps = Math.round(1 / avgDiff);
+			// Skip first call (no baseline), backwards jumps (seek), and absurd gaps (>1s of source time).
+			const validBaseline = data.lastFrameNum > 0;
+			const validForward = mediaTimeDiff > 0 && frameNumDiff > 0;
+			const reasonablyShort = mediaTimeDiff < 1;
 
-					// Update metadata with framerate
-					if (isLeft) {
-						setLeftMediaMetaData(prev => ({ ...prev, framerate: fps }));
-					} else {
-						setRightMediaMetaData(prev => ({ ...prev, framerate: fps }));
-					}
+			if (validBaseline && validForward && reasonablyShort && data.samples.length < MAX_SAMPLES) {
+				data.samples.push(mediaTimeDiff / frameNumDiff);
 
-					// Stop collecting samples after we have a good estimate
-					if (data.samples.length >= 50) {
-						return;
-					}
+				if (data.samples.length >= MIN_SAMPLES) {
+					const fps = computeFps(data.samples);
+					if (fps) reportFps(fps);
 				}
 			}
 
-			data.lastMediaTime = metadata.mediaTime;
-			data.lastFrameNum = metadata.presentedFrames;
+			data.lastMediaTime = mediaTime;
+			data.lastFrameNum = frameNum;
 
-			// Continue sampling
-			if (data.samples.length < 50) {
+			if (data.samples.length < MAX_SAMPLES) {
 				data.callbackId = videoElement.requestVideoFrameCallback(ticker);
 			}
 		};
 
-		// Start the framerate detection
-		if (videoElement.requestVideoFrameCallback) {
-			framerateDataRef.current.callbackId = videoElement.requestVideoFrameCallback(ticker);
-		}
+		framerateDataRef.current.callbackId = videoElement.requestVideoFrameCallback(ticker);
 	};
 
 	const handleLoadedMetadata = video => {
@@ -860,10 +1196,11 @@ function MediaContainer({
 				fileSize: fileMetadata?.fileSize || null,
 			});
 
-			// Reset and start framerate detection for left video only
+			// Reset and start framerate detection for left video only.
+			// Use the real underlying <video> element (exposed by VideoJSPlayer's synthetic event).
 			if (!isImage) {
 				leftFramerateData.current = { samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null };
-				detectFramerate(target, leftFramerateData, true);
+				detectFramerate(target.mediaElement || target, leftFramerateData, true);
 			}
 		}
 
@@ -883,10 +1220,11 @@ function MediaContainer({
 				framerate: isImage ? 0 : 30, // Default for video, will be updated by detection
 			});
 
-			// Reset and start framerate detection for right video only
+			// Reset and start framerate detection for right video only.
+			// Use the real underlying <video> element (exposed by VideoJSPlayer's synthetic event).
 			if (!isImage) {
 				rightFramerateData.current = { samples: [], lastMediaTime: 0, lastFrameNum: 0, callbackId: null };
-				detectFramerate(target, rightFramerateData, false);
+				detectFramerate(target.mediaElement || target, rightFramerateData, false);
 			}
 		}
 
@@ -920,33 +1258,40 @@ function MediaContainer({
 			const prev = prevMasterTimeRef.current?.[side];
 			prevMasterTimeRef.current[side] = t;
 			const looped = typeof prev === 'number' && Number.isFinite(prev) && t + 0.25 < prev;
+			const offset = shorterVideoOffsetRef.current || 0;
 			if (looped) {
-				// Master looped back; resume the slave from the new time.
+				// Master looped back; resume the slave from the offset-shifted new time.
 				slaveFrozenRef.current = false;
 				const masterIsLeft = side === 'left';
 				const slaveElem = masterIsLeft ? rightMediaElem.current : leftMediaElem.current;
 				const slaveMeta = masterIsLeft ? rightMediaMetaData : leftMediaMetaData;
 				const slaveDur = slaveMeta?.duration ?? slaveElem?.duration;
 				const slaveFr = slaveMeta?.framerate ?? 30;
+				const info = getSlaveTarget(t, slaveDur, offset);
 				try {
 					slaveElem.playbackRate = toolSettings.playerSpeed;
-					if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 && t >= slaveDur - 0.02) {
+					if (info.state === 'after') {
 						freezeVideoAtEnd(slaveElem, slaveDur, slaveFr);
+					} else if (info.state === 'before') {
+						slaveElem.currentTime = 0;
+						safePause(slaveElem);
 					} else {
-						slaveElem.currentTime = typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 ? Math.min(t, slaveDur) : t;
+						slaveElem.currentTime = info.time;
 						safePlay(slaveElem);
 					}
 				} catch {}
 			}
 
-			// If playback has surpassed the shorter/slave duration, force-freeze it to its last frame.
+			// If master has passed the slave's window (either before its start or
+			// after its end), force-freeze it on the appropriate edge frame.
 			if (leftMediaType === 'video' && rightMediaType === 'video') {
 				const masterIsLeft = masterSideRef.current === 'left';
 				const slaveElem = masterIsLeft ? rightMediaElem.current : leftMediaElem.current;
 				const slaveMeta = masterIsLeft ? rightMediaMetaData : leftMediaMetaData;
 				const slaveDur = slaveMeta?.duration ?? slaveElem?.duration;
 				const slaveFr = slaveMeta?.framerate ?? 30;
-				if (typeof slaveDur === 'number' && Number.isFinite(slaveDur) && slaveDur > 0 && t >= slaveDur - 0.02) {
+				const info = getSlaveTarget(t, slaveDur, offset);
+				if (info.state === 'after') {
 					freezeVideoAtEnd(slaveElem, slaveDur, slaveFr);
 				}
 			}

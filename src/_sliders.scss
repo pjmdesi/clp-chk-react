@@ -171,6 +171,58 @@
 		}
 	}
 
+	.player-slider-bands {
+		position: absolute;
+		pointer-events: none;
+
+		.player-slider-band {
+			position: absolute;
+			pointer-events: auto;
+			cursor: grab;
+			background: var(--gray7);
+			transition: background var(--default-timing);
+
+			&:hover {
+				background: var(--gray8);
+			}
+
+			&.dragging {
+				cursor: grabbing;
+				background: var(--gray6);
+			}
+		}
+
+		// Horizontal slider: band sits in the same strip as the in/out markers
+		// (below the slider track), so it visually connects the start/end ticks.
+		// Slim height keeps the tick marks visually prominent above and below it.
+		&.is-horizontal {
+			inset: calc(100% + 2px) var(--spacing) auto var(--spacing);
+			height: calc(var(--slider-tick-length) + 2 * var(--spacing));
+
+			.player-slider-band {
+				top: 50%;
+				transform: translateY(-50%);
+				height: 4px;
+				min-width: 4px;
+			}
+		}
+
+		// Vertical slider: band sits in the same strip as the in/out markers,
+		// to the right of the slider track. Currently unused (only the horizontal
+		// timeline consumes bands) but kept symmetric for future use.
+		&.is-vertical {
+			inset: var(--spacing) auto var(--spacing) calc(100% + 2px);
+			width: calc(var(--slider-tick-length) + 2 * var(--spacing));
+
+			.player-slider-band {
+				left: 50%;
+				transform: translateX(-50%);
+				width: 4px;
+				min-height: 4px;
+			}
+		}
+	}
+
 	.unit-input-container {
 		flex: 0 0;
 

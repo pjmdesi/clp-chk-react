@@ -80,12 +80,16 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 
 			player.on('loadedmetadata', () => {
 				if (onLoadedMetadata) {
+					const mediaEl = player.el()?.querySelector('video') || null;
 					onLoadedMetadata({
 						target: {
 							id: id,
 							duration: player.duration(),
 							videoWidth: player.videoWidth(),
-							videoHeight: player.videoHeight()
+							videoHeight: player.videoHeight(),
+							// Expose the real <video> element so consumers can use
+							// requestVideoFrameCallback for accurate frame timing.
+							mediaElement: mediaEl,
 						}
 					});
 				}
@@ -147,7 +151,15 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 					},
 					get offsetHeight() {
 						return wrapperRef.current ? wrapperRef.current.offsetHeight : 0;
-					}
+					},
+					// Returns the underlying <video> element so callers can use
+					// requestVideoFrameCallback or other native DOM APIs. The element
+					// is queried lazily because video.js may swap it on src changes.
+					getMediaElement: () => {
+						const p = playerRef.current;
+						if (!p || (typeof p.isDisposed === 'function' && p.isDisposed())) return null;
+						return p.el()?.querySelector('video') || null;
+					},
 				};
 			}
 		}
