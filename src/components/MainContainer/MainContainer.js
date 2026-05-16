@@ -672,6 +672,7 @@ function MainContainer() {
                         toolMode: 'overlay',
                         toolOptions: { ...prev.toolOptions, auto: false },
                     }));
+                    return true;
 				case 'toolAutoMoveToggle':
 					setToolSettings(prev => {
 						if (prev.toolMode !== 'divider' && prev.toolMode !== 'horizontalDivider') return prev;
