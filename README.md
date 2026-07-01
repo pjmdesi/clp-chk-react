@@ -29,6 +29,23 @@ Available as a deployable web app, ClpChk offers the following features:
 
 You can download the latest release from the [Releases](https://github.com/pjmdesi/clp-chk-react/releases/latest) page. It is a purely [portable app](https://portableapps.com/about/what_is_a_portable_app), so installation is not required. Just download the exe and run it! You can even run it from a USB drive.
 
+It's also available as a web app at: https://clpchk.pjm.design/
+
+## Usage
+
+1. Load your media files into the left and right panes by clicking on the respective "Load File" buttons or dragging them onto the buttons from another window.
+2. Inspect the media files side by side. Use the following controls for easy manipulation:
+    - Zoom with the scroll wheel (snap-based). A vertical zoom slider is also available.
+    - Trackpad: pinch to zoom; two-finger scroll pans.
+    - Pan by clicking and dragging with the middle mouse button.
+    - Double middle-click resets zoom to 100% and clears pan offset.
+    - Horizontal scroll wheel scrubs the timeline (videos only).
+    - Toggle tool lock ("stick") by clicking inside the media area.
+    - Change tool mode using the tool selector in the control bar (Divider / Cutout / Overlay).
+    - Right-click while in divider mode toggles vertical/horizontal divider.
+    - When using a cutout tool, adjust the size by right-clicking and dragging.
+    - In the Electron app, click a loaded filename to open it in your file browser.
+
 ## Web / Netlify
 
 This repo can also be built and deployed as a normal static web page (no Electron runtime), without forking or removing the Electron code.
@@ -69,21 +86,6 @@ When running as a web page, the browser sandbox applies:
 - Electron-only actions (like “reveal in Finder/Explorer”) are unavailable.
 
 File loading in the web build uses the browser’s file picker (File System Access API when available, otherwise a standard `<input type="file">`).
-
-## Usage
-
-1. Load your media files into the left and right panes by clicking on the respective "Load File" buttons or dragging them onto the buttons from another window.
-2. Inspect the media files side by side. Use the following controls for easy manipulation:
-    - Zoom with the scroll wheel (snap-based). A vertical zoom slider is also available.
-    - Trackpad: pinch to zoom; two-finger scroll pans.
-    - Pan by clicking and dragging with the middle mouse button.
-    - Double middle-click resets zoom to 100% and clears pan offset.
-    - Horizontal scroll wheel scrubs the timeline (videos only).
-    - Toggle tool lock ("stick") by clicking inside the media area.
-    - Change tool mode using the tool selector in the control bar (Divider / Cutout / Overlay).
-    - Right-click while in divider mode toggles vertical/horizontal divider.
-    - When using a cutout tool, adjust the size by right-clicking and dragging.
-    - In the Electron app, click a loaded filename to open it in your file browser.
 
 ## Settings
 
