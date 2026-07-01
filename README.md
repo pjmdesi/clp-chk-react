@@ -4,7 +4,7 @@
 [![Downloads](https://img.shields.io/github/downloads/pjmdesi/clp-chk-react/total)](https://github.com/pjmdesi/clp-chk-react/releases)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/pjmdesi/clp-chk-react#)
 
-Ever wanted to compare two videos or images side by side? ClpChk is a simple tool that allows you to do that quickly. It has a user-friendly interface and supports zooming and panning, making it easy to analyze differences in video quality.
+Ever wanted to compare two videos or images side by side? ClpChk is a simple tool that allows you to do that quickly. It has a user-friendly interface and supports zooming and panning, making it easy to analyze differences in video/image quality.
 
 I developed this tool to help with my own media analysis. I found no way to quickly to compare a compressed version of a video or image file side-by-side. I hope it can be useful for others as well.
 
