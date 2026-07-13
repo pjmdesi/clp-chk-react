@@ -1,26 +1,27 @@
 const rules = require('./webpack.rules');
 
 rules.push(
-	// {
-	// 	test: /\.css$/,
-	// 	use: [{ loader: 'style-loader' }, { loader: 'css-loader' }],
-	// },
     {
 		test: /\.s?[ac]ss$/i,
 		use: ['style-loader', 'css-loader', 'sass-loader'],
 	},
 	{
-		// all graphics/media/font assets
-		test: /\.(ico|icns|png|jpg|gif|json|xml|svg|mp4|avi|mov|mpeg|mp3|jpe?g|webp|woff2?|ttf|otf|eot)$/i,
-		use: [
-			{
-				loader: 'file-loader',
-				options: {
-					name: 'assets/[name].[ext]',
-					publicPath: '../.',
-				},
-			},
-		],
+		// Fonts are inlined as data: URLs. The renderer is served from inside the
+		// asar in production, where document-relative asset URLs are fragile —
+		// css-loader's url() handling (v6+) bypassed the old file-loader rule and
+		// emitted the font at a path unreachable from main_window/, so the app
+		// silently fell back to the default font. Inlining removes path
+		// resolution entirely; the size cost is irrelevant for a local bundle.
+		test: /\.(woff2?|ttf|otf|eot)$/i,
+		type: 'asset/inline',
+	},
+	{
+		// all graphics/media assets
+		test: /\.(ico|icns|png|jpg|gif|json|xml|svg|mp4|avi|mov|mpeg|mp3|jpe?g|webp)$/i,
+		type: 'asset/resource',
+		generator: {
+			filename: 'assets/[name][ext][query]',
+		},
 	}
 );
 
