@@ -40,10 +40,23 @@ const guessVideoMimeType = url => {
 };
 
 function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop, muted, playbackRate, volume, style, videoStyle, videoRef }) {
-	const containerRef = React.useRef(null);
 	const wrapperRef = React.useRef(null);
 	const playerRef = React.useRef(null);
 	const videoElementRef = React.useRef(null);
+
+	// The video.js listeners below are registered exactly once (player creation),
+	// so they must read the LATEST callback props through refs. Calling the props
+	// captured at mount time freezes their closures: e.g. the parent's
+	// handleTimeUpdate closes over PlayerControls, whose methods are guarded by
+	// `if (leftMedia && rightMedia)` — the first-loaded player mounts while the
+	// other slot is still empty, so its captured guard is false forever and the
+	// timecode/playhead silently stop updating once that side becomes master.
+	const onTimeUpdateRef = React.useRef(null);
+	onTimeUpdateRef.current = onTimeUpdate;
+	const onLoadedMetadataRef = React.useRef(null);
+	onLoadedMetadataRef.current = onLoadedMetadata;
+	const onEndedRef = React.useRef(null);
+	onEndedRef.current = onEnded;
 
 	React.useEffect(() => {
 		// Make sure Video.js player is only initialized once
@@ -71,17 +84,15 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 
 			playerRef.current = player;
 
-			// Set up event listeners
+			// Set up event listeners (always dispatch through the refs above)
 			player.on('timeupdate', () => {
-				if (onTimeUpdate) {
-					onTimeUpdate({ target: { currentTime: player.currentTime() } });
-				}
+				onTimeUpdateRef.current?.({ target: { currentTime: player.currentTime() } });
 			});
 
 			player.on('loadedmetadata', () => {
-				if (onLoadedMetadata) {
+				if (onLoadedMetadataRef.current) {
 					const mediaEl = player.el()?.querySelector('video') || null;
-					onLoadedMetadata({
+					onLoadedMetadataRef.current({
 						target: {
 							id: id,
 							duration: player.duration(),
@@ -96,9 +107,7 @@ function VideoJSPlayer({ src, id, onTimeUpdate, onLoadedMetadata, onEnded, loop,
 			});
 
 			player.on('ended', () => {
-				if (onEnded) {
-					onEnded();
-				}
+				onEndedRef.current?.();
 			});
 
 			// Expose player methods via ref
