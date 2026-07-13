@@ -170,8 +170,8 @@ function MediaContainer({
 	const pausedByBufferingRef = React.useRef(false);
 	const resumeAfterBufferingRef = React.useRef(false);
 	const bufferingDebounceTimeoutRef = React.useRef(null);
-	const lastPlaybackEmitAtRef = React.useRef(0);
 	const prevMasterTimeRef = React.useRef({ left: null, right: null });
+	const prevPlaybackStateRef = React.useRef('paused');
 	const slaveFrozenRef = React.useRef(false);
 
 	const safePlay = React.useCallback(elem => {
@@ -413,6 +413,18 @@ function MediaContainer({
 		let frameCount = 0;
 		let cooldown = 0;
 
+		// Drive the playhead/timecode UI from here, once per presented master frame.
+		// video.js 'timeupdate' only fires ~4x/sec, which makes the timecode skip
+		// several frames per update; rVFC hands us every frame with its exact
+		// presentation time (mediaTime), which is what a frame-counting readout needs.
+		let lastEmittedTime = null;
+		const emitPlayheadTime = t => {
+			if (typeof t !== 'number' || !Number.isFinite(t)) return;
+			if (t === lastEmittedTime) return;
+			lastEmittedTime = t;
+			PlayerControls.setCurrentTime(t);
+		};
+
 		const getBaseRate = () => {
 			const speed = toolSettingsRef.current?.playerSpeed;
 			return typeof speed === 'number' && Number.isFinite(speed) && speed > 0 ? speed : 1;
@@ -440,6 +452,13 @@ function MediaContainer({
 				}
 			} catch {}
 
+			const masterTime = typeof metadata?.mediaTime === 'number' && Number.isFinite(metadata.mediaTime)
+				? metadata.mediaTime
+				: masterApi.currentTime;
+
+			// UI position updates happen every frame, even during correction cooldowns.
+			emitPlayheadTime(masterTime);
+
 			// Cooldown after a correction — let the rate change or seek take effect
 			// before stacking another correction on top.
 			if (cooldown > 0) {
@@ -447,10 +466,6 @@ function MediaContainer({
 				schedule();
 				return;
 			}
-
-			const masterTime = typeof metadata?.mediaTime === 'number' && Number.isFinite(metadata.mediaTime)
-				? metadata.mediaTime
-				: masterApi.currentTime;
 
 			const slaveMeta = masterSideRef.current === 'left' ? rightMetaRef.current : leftMetaRef.current;
 			const slaveDur = slaveMeta?.duration ?? slaveApi.duration;
@@ -611,6 +626,9 @@ function MediaContainer({
 	// stuttery / wrong-speed first second of playback: one side renders smoothly
 	// while the other catches up by dropping frames.
 	React.useEffect(() => {
+		const prevPlaybackState = prevPlaybackStateRef.current;
+		prevPlaybackStateRef.current = playbackStatus.playbackState;
+
 		if (!(leftMedia && rightMedia && leftMediaType === 'video' && rightMediaType === 'video')) return;
 
 		const leftMeta = leftMetaRef.current;
@@ -721,6 +739,19 @@ function MediaContainer({
 			rightMediaElem.current.playbackRate = speed;
 			if (leftMediaType === 'video') safePause(leftMediaElem.current);
 			if (rightMediaType === 'video') safePause(rightMediaElem.current);
+
+			// On the playing -> paused transition, adopt the master's ACTUAL paused
+			// position into app state rather than letting the paused-seek effect drag
+			// the videos back to the last-emitted position (which trails the video
+			// slightly). The paused-seek effect then re-aligns the slave to this
+			// exact time, so pausing holds position instead of nudging backward.
+			if (prevPlaybackState === 'playing') {
+				const masterElem = masterSideRef.current === 'left' ? leftMediaElem.current : rightMediaElem.current;
+				const t = masterElem?.currentTime;
+				if (typeof t === 'number' && Number.isFinite(t)) {
+					PlayerControls.setCurrentTime(t);
+				}
+			}
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [playbackStatus.playbackState, leftMedia, rightMedia, leftMediaType, rightMediaType, safePlay, safePause, getFreezeTime]);
@@ -1221,18 +1252,17 @@ function MediaContainer({
 		}
 	};
 
+	// Master 'timeupdate' handler: loop detection + slave window freezing ONLY.
+	// The playhead/timecode position is NOT emitted from here — timeupdate fires
+	// ~4x/sec, far too coarse for a frame-accurate readout. The rVFC sync loop
+	// above emits the position on every presented master frame instead.
 	const handleTimeUpdate = side => e => {
-		// Don't update position while user is scrubbing the slider
+		// Don't react while user is scrubbing the slider
 		if (playbackStatus.isScrubbing) return;
 		if (playbackStatusRef.current?.playbackState !== 'playing') return;
-		// Only the current master should drive the shared playbackPosition.
+		// Only the current master drives loop/freeze handling.
 		if (side !== masterSideRef.current) return;
 		if (leftIsWaitingRef.current || rightIsWaitingRef.current || pausedByBufferingRef.current) return;
-
-		const now = performance.now();
-		const minEmitIntervalMs = 100; // keep UI responsive without re-rendering too often
-		if (now - lastPlaybackEmitAtRef.current < minEmitIntervalMs) return;
-		lastPlaybackEmitAtRef.current = now;
 
 		const t = e.target.currentTime;
 		if (typeof t === 'number' && Number.isFinite(t)) {
@@ -1277,8 +1307,6 @@ function MediaContainer({
 					freezeVideoAtEnd(slaveElem, slaveDur, slaveFr);
 				}
 			}
-
-			PlayerControls.setCurrentTime(t);
 		}
 	};
 
