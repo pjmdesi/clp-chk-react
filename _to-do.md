@@ -59,6 +59,7 @@
     2. If the user inputs a video file in one panel, and an image in the other, the second input should be refused (it should match whatever was first).
     3. ~~They might choose video files of different lengths. If they do, I need to display an warning that says this, but the app should still work. The timecode slider should proceed past the shorter video file (displaying the last frame) until it reaches the end of the longer video.~~
     4. ~~If the user inputs files of different dimensions, they should still match in size, adjusting the smaller one to match that of the larger one.~~
+* When the app opens and the app is set to reopen files and one or both of the previously opened files are no longer found on disk, the app needs to show an error message and clear the missing file(s) from the panes.
 
 ### Features (app)
 

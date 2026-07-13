@@ -23,15 +23,9 @@ module.exports = {
 		},
 	},
 	makers: [
-		{
-			name: '@electron-forge/maker-squirrel',
-			config: {
-				options: {
-                    setupIcon: './src/assets/images/app-icon.ico',
-					icon: './src/assets/images/app-icon.ico',
-				},
-			},
-		},
+		// Windows ships as a portable exe only (see maker-portable below) — no
+		// installer. maker-squirrel was removed intentionally; it produced an
+		// unwanted "Setup.exe" + auto-update feed files (.nupkg/RELEASES).
 		{
 			name: '@electron-forge/maker-zip',
 			platforms: ['darwin'],

@@ -1,8 +1,8 @@
 name: Release
 
 # Triggered by version tags (created via `npm run release:patch|minor|major`).
-# Builds the Windows artifacts with Electron Forge and publishes them to a
-# GitHub Release named after the tag.
+# Builds the portable Windows exe with Electron Forge and publishes it to a
+# GitHub Release with notes generated from the commit log.
 on:
   push:
     tags: ['v*']
@@ -14,6 +14,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags so release notes can diff against the previous tag.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -26,11 +29,33 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build Windows artifacts (portable + Squirrel setup)
+      - name: Build portable Windows exe
         run: npm run make
+
+      - name: Generate release notes from commit log
+        shell: bash
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          RANGE=${PREV_TAG:+$PREV_TAG..}$GITHUB_REF_NAME
+          {
+            echo "## Changes"
+            echo
+            # Commit subjects in the range, minus the version-bump commit npm version creates.
+            git log --no-merges --pretty='format:- %s' "$RANGE" | grep -vx "- ${GITHUB_REF_NAME#v}" || true
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo
+              echo "**Full changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$PREV_TAG...$GITHUB_REF_NAME"
+            fi
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: out/make/**/*.exe
-          generate_release_notes: true
+          # The portable exe sits at the root of out/make; the electron-builder
+          # byproducts (builder-*.yml) beside it are intentionally not matched.
+          files: out/make/*.exe
+          body_path: RELEASE_NOTES.md
+          draft: false
+          make_latest: true

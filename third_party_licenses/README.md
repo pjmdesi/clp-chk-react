@@ -3,7 +3,7 @@
 This folder is generated and contains LICENSE/NOTICE files copied from third-party npm packages used by this repo.
 If a package does not ship a license file in its npm tarball, it may not appear here even though it is listed in THIRD_PARTY_NOTICES.md.
 
-Generated: 2026-05-16T21:57:40.661Z
+Generated: 2026-07-13T16:12:55.110Z
 
 - @babel/core (7.29.0): LICENSE, license
 - @babel/preset-react (7.28.5): LICENSE, license
@@ -16,6 +16,7 @@ Generated: 2026-05-16T21:57:40.661Z
 - @electron-forge/plugin-fuses (7.11.1): LICENSE, license
 - @electron-forge/plugin-webpack (7.11.1): LICENSE, license
 - @electron/fuses (1.8.0): LICENSE, license
+- @eslint/js (9.39.5): LICENSE, license
 - @rabbitholesyndrome/electron-forge-maker-portable: no LICENSE/NOTICE file found (wrote LICENSE_INFO.txt)
 - @vercel/webpack-asset-relocator-loader (1.10.0): LICENSE, license
 - @webpack-cli/serve (3.0.1): LICENSE, license
@@ -27,7 +28,11 @@ Generated: 2026-05-16T21:57:40.661Z
 - electron-devtools-installer (4.0.0): LICENSE, license
 - electron-squirrel-startup (1.0.1): LICENSE, license
 - electron-store (11.0.2): LICENSE, license
+- eslint (9.39.5): LICENSE, license
+- eslint-plugin-react (7.37.5): LICENSE, license
+- eslint-plugin-react-hooks (7.1.1): LICENSE, license
 - file-loader (6.2.0): LICENSE, license
+- globals (17.7.0): LICENSE, license
 - html-webpack-plugin (5.6.7): LICENSE, license
 - lucide-react (0.562.0): LICENSE, license
 - new-component (6.0.0): LICENSE.md, license.md
@@ -40,6 +45,7 @@ Generated: 2026-05-16T21:57:40.661Z
 - sass-loader (16.0.8): LICENSE, license
 - style-loader (4.0.0): LICENSE, license
 - video.js (8.23.7): LICENSE, license
+- vitest (4.1.10): LICENSE.md, license.md
 - webpack (5.106.2): LICENSE, license
 - webpack-cli (6.0.1): LICENSE, license
 - webpack-dev-server (5.2.4): LICENSE, license
