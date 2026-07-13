@@ -5,6 +5,8 @@ import MediaContainer from '../MediaContainer';
 import ControllerBar from '../ControllerBar';
 // import { getFileHandle, getFileFromHandle } from '../../utils/fileHandleStore';
 import { saveFileMetadata, getFileMetadata } from '../../utils/fileMetadataStore';
+import { mergeWithDefaults, tryParseJsonObject } from '../../utils/settingsMerge';
+import { toFetchableFileUrl, fileUrlToPath } from '../../utils/filePaths';
 
 import { useResizeDetector } from 'react-resize-detector';
 import ModalContainer from '../ModalContainer/ModalContainer';
@@ -65,20 +67,6 @@ const buildShortcutList = mapObj => {
 	return list;
 };
 
-const isPlainObject = value => {
-	return !!value && typeof value === 'object' && !Array.isArray(value);
-};
-
-const tryParseJsonObject = value => {
-	if (typeof value !== 'string' || !value.trim()) return null;
-	try {
-		const parsed = JSON.parse(value);
-		return isPlainObject(parsed) ? parsed : null;
-	} catch {
-		return null;
-	}
-};
-
 // Keyboard controls are persisted separately from tool/app settings.
 // Shape matches the defaults in settings/keyboardControlsMap.js.
 const loadAndMigrateKeyboardControlsMap = () => {
@@ -96,86 +84,6 @@ const loadAndMigrateKeyboardControlsMap = () => {
 	}
 
 	return merged;
-};
-
-const tryCoerceNumberString = value => {
-	if (typeof value !== 'string') return null;
-	const trimmed = value.trim();
-	if (!trimmed) return null;
-
-	// Strict numeric string: integer/float with optional exponent.
-	// Examples allowed: "10", "-3.5", ".25", "1e3", "-2.1E-2"
-	const numericPattern = /^[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[-+]?\d+)?$/i;
-	if (!numericPattern.test(trimmed)) return null;
-
-	const num = Number(trimmed);
-	return Number.isFinite(num) ? num : null;
-};
-
-// Deep-merge: keep user's existing values when compatible; fill any missing/new keys from defaults.
-// Also retains any extra keys the user may already have.
-const mergeWithDefaults = (defaults, saved) => {
-	if (!isPlainObject(defaults)) {
-		return { merged: saved ?? defaults, changed: saved !== defaults };
-	}
-
-	const safeSaved = isPlainObject(saved) ? saved : {};
-	let changed = false;
-	const merged = {};
-
-	for (const key of Object.keys(defaults)) {
-		const defaultValue = defaults[key];
-		const hasSavedKey = Object.prototype.hasOwnProperty.call(safeSaved, key);
-
-		if (!hasSavedKey) {
-			merged[key] = defaultValue;
-			changed = true;
-			continue;
-		}
-
-		const savedValue = safeSaved[key];
-
-		if (isPlainObject(defaultValue) && isPlainObject(savedValue)) {
-			const { merged: childMerged, changed: childChanged } = mergeWithDefaults(defaultValue, savedValue);
-			merged[key] = childMerged;
-			if (childChanged) changed = true;
-			continue;
-		}
-
-		// Strict: preserve only when types match.
-		// Special-case: when default expects a number, allow numeric strings ("100", "0.8").
-		if (typeof defaultValue === 'number') {
-			if (typeof savedValue === 'number') {
-				merged[key] = savedValue;
-			} else {
-				const coerced = tryCoerceNumberString(savedValue);
-				if (coerced !== null) {
-					merged[key] = coerced;
-					changed = true;
-				} else {
-					merged[key] = defaultValue;
-					changed = true;
-				}
-			}
-			continue;
-		}
-
-		if (typeof savedValue === typeof defaultValue) {
-			merged[key] = savedValue;
-		} else {
-			merged[key] = defaultValue;
-			changed = true;
-		}
-	}
-
-	// Keep any unknown keys (forward/backward compatibility)
-	for (const key of Object.keys(safeSaved)) {
-		if (!Object.prototype.hasOwnProperty.call(defaults, key)) {
-			merged[key] = safeSaved[key];
-		}
-	}
-
-	return { merged, changed };
 };
 
 const loadAndMigrateToolSettings = () => {
@@ -252,46 +160,6 @@ const isElectronRuntime = !!(typeof process !== 'undefined' && process?.versions
 const hasPreloadApi = !!(typeof window !== 'undefined' && window?.api && typeof window.api.openFile === 'function');
 const isInElectron = isElectronRuntime || hasPreloadApi;
 const isInBrowser = !isInElectron;
-
-const toFetchableFileUrl = maybePath => {
-	if (typeof maybePath !== 'string') return null;
-	const raw = maybePath.trim();
-	if (!raw) return null;
-	// Already a URL we can fetch.
-	if (/^(app|file):\/\//i.test(raw)) return raw;
-
-	// Windows drive path: C:\foo\bar.mp4 -> file:///C:/foo/bar.mp4
-	if (/^[A-Za-z]:[\\/]/.test(raw)) {
-		const normalized = raw.replace(/\\/g, '/');
-		return `file:///${encodeURI(normalized)}`;
-	}
-
-	// UNC path: \\server\share\file.mp4 -> file://server/share/file.mp4
-	if (/^\\\\[^\\]+\\[^\\]+/.test(raw)) {
-		const withoutSlashes = raw.replace(/^\\\\/, '');
-		const normalized = withoutSlashes.replace(/\\/g, '/');
-		return `file://${encodeURI(normalized)}`;
-	}
-
-	// POSIX absolute path: /home/user/file.mp4 -> file:///home/user/file.mp4
-	if (raw.startsWith('/')) {
-		return `file://${encodeURI(raw)}`;
-	}
-
-	return null;
-};
-
-const fileUrlToPath = fileUrl => {
-	if (typeof fileUrl !== 'string' || !fileUrl.startsWith('file://')) return null;
-	try {
-		let p = decodeURIComponent(new URL(fileUrl).pathname);
-		// Windows file:// URLs include a leading slash before drive letter.
-		if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1);
-		return p;
-	} catch {
-		return null;
-	}
-};
 
 const detectUserOS = (() => {
 	if (typeof navigator !== 'undefined') {
@@ -737,6 +605,23 @@ function MainContainer() {
 					PlayerControls.setCurrentTime(Math.max(0, end - 1 / fr));
 					return true;
 				}
+				case 'videoMoveToShorterStart':
+				case 'videoMoveToShorterEnd': {
+					// Jump to the shorter video's start/end within the longer video's timeline.
+					if (leftMediaMetaData?.mediaType !== 'video' || rightMediaMetaData?.mediaType !== 'video') return false;
+					const ld = leftMediaMetaData?.duration;
+					const rd = rightMediaMetaData?.duration;
+					if (typeof ld !== 'number' || !Number.isFinite(ld) || typeof rd !== 'number' || !Number.isFinite(rd)) return false;
+					const shorterDur = Math.min(ld, rd);
+					if (action === 'videoMoveToShorterStart') {
+						PlayerControls.setCurrentTime(Math.max(0, shorterVideoOffset));
+						return true;
+					}
+					const fr = unifiedMediaDimensions?.framerate || 30;
+					const end = typeof playbackStatus?.playbackEndTime === 'number' ? playbackStatus.playbackEndTime : 0;
+					PlayerControls.setCurrentTime(Math.max(0, Math.min(end, shorterVideoOffset + shorterDur) - 1 / fr));
+					return true;
+				}
 				case 'videoToggleLoop':
 					setToolSettings(prev => ({ ...prev, playerLoop: !prev.playerLoop }));
 					return true;
@@ -782,6 +667,7 @@ function MainContainer() {
 			rightMediaMetaData,
 			setToolSettings,
 			setZoomScaleClamped,
+			shorterVideoOffset,
 			swapMedias,
 			toolSettingsRef,
 			unifiedMediaDimensions,
@@ -1013,7 +899,6 @@ function MainContainer() {
 				setLeftMediaMetaData={setLeftMediaMetaData}
 				rightMediaMetaData={rightMediaMetaData}
 				setRightMediaMetaData={setRightMediaMetaData}
-				resetStoredSettings={resetStoredSettings}
 				isInElectron={isInElectron}
 				isInBrowser={isInBrowser}
 				userOS={userOS}

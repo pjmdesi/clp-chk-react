@@ -1,10 +1,8 @@
-import { setupTitlebar, attachTitlebarToWindow } from 'custom-electron-titlebar/main';
+import { setupTitlebar } from 'custom-electron-titlebar/main';
 import Store from 'electron-store';
 
-const { app, session, protocol, BrowserWindow, Menu, ipcMain, shell, ipcRenderer, contextBridge, screen, dialog } = require('electron');
+const { app, protocol, BrowserWindow, Menu, ipcMain, shell, screen, dialog } = require('electron');
 const path = require('node:path');
-const os = require('node:os');
-const fs = require('node:fs');
 
 // In production, app.isPackaged will be true
 // In development, it will be false
@@ -167,14 +165,6 @@ Menu.setApplicationMenu(applicationMenu);
 setupTitlebar();
 
 protocol.registerSchemesAsPrivileged([
-	{
-		scheme: 'app',
-		privileges: {
-			standard: true,
-			secure: true,
-			supportFetchAPI: true,
-		},
-	},
 	{
 		scheme: 'file',
 		privileges: {

@@ -1,16 +1,14 @@
 import React from 'react';
-import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 
 import MediaFileInput from '../MediaFileInput';
-import Icon from '../Icon';
 import VideoJSPlayer from '../VideoJSPlayer';
 
 import { getZoomBounds } from '../../settings/userSettingsSchema';
-import { keyboardControlsMap } from '../../settings/keyboardControlsMap';
 import ImagePlayer from '../ImagePlayer';
 import PlayerSlider from '../PlayerSlider';
 import { getFileMetadata } from '../../utils/fileMetadataStore';
+import { getSlaveTarget } from '../../utils/videoSync';
 import MediaInfoBar from '../MediaInfoBar';
 import ClipperLock from '../ClipperLock';
 import ValidationMessage from '../ValidationMessage';
@@ -36,7 +34,6 @@ function MediaContainer({
 	setLeftMediaMetaData,
 	rightMediaMetaData,
 	setRightMediaMetaData,
-	resetStoredSettings,
 	isInElectron,
 	isInBrowser,
 	setCurrentModal,
@@ -67,20 +64,6 @@ function MediaContainer({
 	// re-running the whole effect when the user is dragging the offset band.
 	const shorterVideoOffsetRef = React.useRef(0);
 	shorterVideoOffsetRef.current = shorterVideoOffset;
-
-	// Maps a master-timeline time T to where the slave should sit, given its duration
-	// and the current offset. State is 'before' (slave hasn't started yet — freeze on
-	// frame 0), 'active' (slave is playing within its range), or 'after' (slave has
-	// ended — freeze on last frame). 'invalid' means we couldn't compute (missing dur).
-	const getSlaveTarget = React.useCallback((masterTime, slaveDuration, offset) => {
-		if (typeof slaveDuration !== 'number' || !Number.isFinite(slaveDuration) || slaveDuration <= 0) {
-			return { time: masterTime, state: 'invalid' };
-		}
-		const t = masterTime - (typeof offset === 'number' && Number.isFinite(offset) ? offset : 0);
-		if (t < 0) return { time: 0, state: 'before' };
-		if (t >= slaveDuration) return { time: slaveDuration, state: 'after' };
-		return { time: t, state: 'active' };
-	}, []);
 
 	// Keep the latest clipMedia function for autoscan interval callbacks.
 	const clipMediaRef = React.useRef(null);
@@ -198,7 +181,7 @@ function MediaContainer({
 				result.catch(err => {
 					// Expected when a pause interrupts play (common during rapid state changes).
 					if (err?.name !== 'AbortError') {
-						// eslint-disable-next-line no-console
+						 
 						console.warn('Video play() failed:', err);
 					}
 				});
@@ -793,7 +776,6 @@ function MediaContainer({
 		leftMediaType,
 		rightMediaType,
 		shorterVideoOffset,
-		getSlaveTarget,
 		getFreezeTime,
 	]);
 

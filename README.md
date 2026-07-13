@@ -100,10 +100,10 @@ Open Settings from the gear icon in the control bar (or use the shortcut below) 
 ## Keyboard shortcuts
 
 - Zoom: `+`/`=` zoom in, `-` zoom out, `0` zoom to 100%, `Shift+0` zoom to 100% (smaller-dimension), `1` zoom to fit, `Shift+1` zoom to fill
-- Tools: `V` vertical divider, `H` horizontal divider, `B` box cutout, `C` circle cutout, `Z` toggle tool lock
+- Tools: `V` vertical divider, `H` horizontal divider, `B` box cutout, `C` circle cutout, `O` overlay, `Z` toggle tool lock
 - Tool options: `A` toggle divider auto-move, `Shift+A` cycle auto-move direction/pattern, `[`/`]` decrease/increase tool size
-- Playback (videos): `Space` play/pause, `←`/`→` step 1 frame, `Shift+←`/`Shift+→` step 10 frames, `Ctrl+←` start, `Ctrl+→` end, `L` toggle loop, `,`/`.` decrease/increase speed
-- App: `Tab` swap left/right, `Ctrl+,` open Settings, `\` toggle docked/floating control bar
+- Playback (videos): `Space` play/pause, `←`/`→` step 1 frame, `Shift+←`/`Shift+→` step 10 frames, `Ctrl+←` start, `Ctrl+→` end, `Ctrl+Shift+←`/`Ctrl+Shift+→` shorter video start/end, `L` toggle loop, `,`/`.` decrease/increase speed
+- App: `Tab` swap left/right, `Ctrl+,` open Settings, `Ctrl+Shift+[`/`Ctrl+Shift+]` close left/right media, `\` toggle docked/floating control bar
 
 ## License
 
