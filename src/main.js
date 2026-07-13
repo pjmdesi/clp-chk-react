@@ -198,11 +198,13 @@ const createWindow = () => {
 		minWidth: 900,
 		minHeight: 600,
 		resizable: true,
-		titleBarStyle: DEV ? 'default' : 'hidden',
-		titleBarOverlay: !DEV,
+		// Same window chrome in dev and prod (custom titlebar, no native frame)
+		// so the dev app looks like what actually ships.
+		titleBarStyle: 'hidden',
+		titleBarOverlay: true,
 		// Transparent (layered) windows on Windows can break native resizing + Aero snapping.
-		transparent: !DEV && !isWindows,
-		frame: DEV,
+		transparent: !isWindows,
+		frame: false,
 		// On Windows, certain window style combos can lose the resize border on newer Electron.
 		// Keeping a thick frame restores edge resizing (and helps Aero snapping).
 		thickFrame: isWindows,
