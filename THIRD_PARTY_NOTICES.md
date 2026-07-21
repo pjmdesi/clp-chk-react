@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Generated: 2026-07-13T18:12:15.650Z
+Generated: 2026-07-13T18:16:06.985Z
 
 This file lists third-party npm packages used by ClpChk, with license identifiers as recorded in `package-lock.json`.
 License information in lockfiles can be missing or incomplete; for authoritative terms, consult each project's repository and the LICENSE file shipped with the package.

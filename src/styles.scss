@@ -82,6 +82,10 @@ button {
 }
 
 body {
+	// The web build has no .cet-container (Electron custom titlebar wrapper) to
+	// paint the app background — keep this in sync with the .cet-container rule.
+	background: var(--background-gradient-south-darker);
+
 	&:has(#mainContainer.electron-mode) {
 		overflow: hidden;
 		border-radius: 16px;
